@@ -2,6 +2,7 @@
 
 #include <types.hpp>
 #include "core/entity.hpp"
+#include <boost/dynamic_bitset.hpp>
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -31,6 +32,7 @@ struct Port {
 };
 
 // Signal/wire connecting ports
+// Ideally, we would have a single writer/multi-reader regulation per update cycle.
 struct Signal {
     std::string name;
     std::uint32_t width = 1;
@@ -59,21 +61,32 @@ struct PortLayout {
 };
 
 // Value storage for simulation
+// How is this meant to work:
+// A module defines the transformation of values from its input ports to output ports
+// Signals propagate the value between the connected ports.
+// Ports are the "Points" at which data has meaning and we can observe the value.
 class BitValue {
 public:
     BitValue();
     explicit BitValue(std::uint32_t width);
-    
     void set_bit(std::uint32_t idx, bool val);
+
+    void set_bits(std::uint32_t start_idx, std::uint32_t end_idx, const boost::dynamic_bitset<>& val);
+    void set_bits(std::uint32_t start_idx, const boost::dynamic_bitset<>& val);
+
     bool get_bit(std::uint32_t idx) const;
-    
+    BitValue range(std::uint32_t start_idx, std::uint32_t end_idx);
+    BitValue range(std::uint32_t start_idx);
+
     std::uint32_t width() const;
     void resize(std::uint32_t new_width);
     void clear();
 
-private:
-    std::vector<std::uint8_t> m_bits;
-    std::uint32_t m_width = 0;
+    boost::dynamic_bitset<>::reference operator[](std::uint32_t idx);
+    bool operator[](std::uint32_t idx) const;
+
+  private:
+    boost::dynamic_bitset<> m_bits;
 };
 
 } // namespace netra

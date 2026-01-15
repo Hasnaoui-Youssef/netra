@@ -65,6 +65,20 @@ target_include_directories(glad PUBLIC
     ${CMAKE_SOURCE_DIR}/glad/include
 )
 
+# Boost (headers only)
+FetchContent_Declare(
+    boost
+    URL https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+FetchContent_GetProperties(boost)
+if(NOT boost_POPULATED)
+    FetchContent_Populate(boost)
+endif()
+
+add_library(boost_headers INTERFACE)
+target_include_directories(boost_headers INTERFACE ${boost_SOURCE_DIR})
+
 # ------------------------------------------------------------------------------
 # Subdirectories
 # ------------------------------------------------------------------------------
@@ -74,6 +88,7 @@ add_subdirectory(graphics)
 add_subdirectory(app)
 
 if(NETRA_BUILD_TESTS)
+    include(CTest)
+    enable_testing()
     add_subdirectory(tests)
 endif()
-

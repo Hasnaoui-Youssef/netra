@@ -14,4 +14,5 @@ target_include_directories(netra_engine PUBLIC
 
 target_link_libraries(netra_engine PUBLIC
     netra_common
+    boost_headers
 )
