@@ -33,6 +33,7 @@ public:
 
     void init(const std::string& shader_dir);
     void render(const std::vector<Gate>& gates, const Window& window);
+    void render_region(const std::vector<Gate>& gates, int x, int y, int width, int height);
 
 private:
     std::array<Shader, static_cast<size_t>(GateType::COUNT)> m_shaders;

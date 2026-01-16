@@ -30,6 +30,16 @@ void Renderer::init(const std::string& shader_dir) {
 }
 
 void Renderer::render(const std::vector<Gate>& gates, const Window& window) {
+    render_region(gates, 0, 0, window.width(), window.height());
+}
+
+void Renderer::render_region(const std::vector<Gate>& gates, int x, int y, int width, int height) {
+    if (width <= 0 || height <= 0) return;
+
+    glEnable(GL_SCISSOR_TEST);
+    glViewport(x, y, width, height);
+    glScissor(x, y, width, height);
+
     glClearColor(0.15f, 0.15f, 0.15f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -39,18 +49,19 @@ void Renderer::render(const std::vector<Gate>& gates, const Window& window) {
         auto& shader = m_shaders[static_cast<size_t>(gate.type)];
         shader.use();
 
-        float x = (gate.position.x / window.width()) * 2.0f - 1.0f;
-        float y = 1.0f - (gate.position.y / window.height()) * 2.0f;
-        float w = (gate.size.x / window.width()) * 2.0f;
-        float h = (gate.size.y / window.height()) * 2.0f;
+        float nx = (gate.position.x / static_cast<float>(width)) * 2.0f - 1.0f;
+        float ny = 1.0f - (gate.position.y / static_cast<float>(height)) * 2.0f;
+        float nw = (gate.size.x / static_cast<float>(width)) * 2.0f;
+        float nh = (gate.size.y / static_cast<float>(height)) * 2.0f;
 
-        shader.set_vec2("u_position", {x, y});
-        shader.set_vec2("u_size", {w, h});
+        shader.set_vec2("u_position", {nx, ny});
+        shader.set_vec2("u_size", {nw, nh});
 
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
     glBindVertexArray(0);
+    glDisable(GL_SCISSOR_TEST);
 }
 
 void Renderer::setup_quad() {
