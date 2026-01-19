@@ -24,6 +24,7 @@ int main() {
     while (!window.should_close()) {
         window.poll_events();
 
+        // Let ImGui define the scissor/viewport for sub-regions; only clear the full framebuffer here.
         glViewport(0, 0, window.width(), window.height());
         glClearColor(0.12f, 0.12f, 0.12f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);

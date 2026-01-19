@@ -42,6 +42,9 @@ void main() {
     d = min(d, sdBezier(uv, vec2(-0.5, -0.5), vec2(0.3, -0.5), vec2(0.7, 0.0)));
     d = min(d, sdBezier(uv, vec2(-0.7, 0.5), vec2(-0.4, 0.0), vec2(-0.7, -0.5)));
 
-    float mask = smoothstep(0.02, 0.01, d);
+    float stroke = 0.01;
+    float aa = fwidth(d);
+    float mask = 1.0 - smoothstep(stroke - aa, stroke + aa, d);
+
     FragColor = vec4(1.0, 0.0, 0.0, mask);
 }

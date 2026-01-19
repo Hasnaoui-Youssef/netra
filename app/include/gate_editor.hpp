@@ -21,6 +21,7 @@ private:
 
     int m_selected_gate = -1;
     int m_dragging_gate = -1;
+    float m_palette_width = 220.f;
     ImVec2 m_drag_offset{0.0f, 0.0f};
     bool m_canvas_hovered = false;
 };

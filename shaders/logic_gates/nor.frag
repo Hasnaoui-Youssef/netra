@@ -40,12 +40,16 @@ void main() {
     float d = sdBezier(uv, vec2(-0.6, 0.5), vec2(-0.3, 0.0), vec2(-0.6, -0.5));
     d = min(d, sdBezier(uv, vec2(-0.6, 0.5), vec2(0.2, 0.5), vec2(0.6, 0.0)));
     d = min(d, sdBezier(uv, vec2(-0.6, -0.5), vec2(0.2, -0.5), vec2(0.6, 0.0)));
-    
+
     float dotDist = abs(length(uv - vec2(0.72, 0.0)) - 0.1);
-    
-    float bodyMask = smoothstep(0.02, 0.01, d);
-    float dotMask = smoothstep(0.02, 0.01, dotDist);
-    
+
+    float stroke = 0.01;
+    float aa_d = fwidth(d);
+    float aa_dot = fwidth(dotDist);
+
+    float bodyMask = 1.0 - smoothstep(stroke - aa_d, stroke + aa_d, d);
+    float dotMask = 1.0 - smoothstep(stroke - aa_dot, stroke + aa_dot, dotDist);
+
     vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), dotMask);
     float alpha = max(bodyMask, dotMask);
     FragColor = vec4(color, alpha);

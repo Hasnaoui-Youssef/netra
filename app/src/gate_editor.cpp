@@ -54,12 +54,22 @@ void GateEditor::draw(netra::graphics::Window& window,
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const float menu_h = ImGui::GetFrameHeight();
+    m_palette_width = ImGui::GetWindowWidth();
 
-    // Fixed palette on the left
-    const float palette_w = 220.0f;
+
+    const ImVec2 canvas_pos(vp->Pos.x + m_palette_width, vp->Pos.y + menu_h);
+    const ImVec2 canvas_size(vp->Size.x - m_palette_width, vp->Size.y - menu_h);
+
+
+    /* Palette setup */
     ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + menu_h), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(palette_w, vp->Size.y - menu_h), ImGuiCond_Always);
-    ImGuiWindowFlags fixed_flags = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+    ImGui::SetNextWindowSize(ImVec2(m_palette_width, vp->Size.y - menu_h), ImGuiCond_Always);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(m_palette_width, vp->Size.y - menu_h), ImVec2(m_palette_width * 2, vp->Size.y - menu_h), nullptr, nullptr);
+    ImGuiWindowFlags fixed_flags =
+        ImGuiWindowFlags_NoMove |
+        // ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoCollapse |
+        ImGuiWindowFlags_NoTitleBar;
 
     if (ImGui::Begin("Palette", nullptr, fixed_flags)) {
         using netra::graphics::GateType;
@@ -70,6 +80,21 @@ void GateEditor::draw(netra::graphics::Window& window,
 
         for (auto t : types) {
             ImGui::Selectable(gate_type_label(t), false);
+
+            if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                if (canvas_size.x > 0.0f && canvas_size.y > 0.0f) {
+                    netra::graphics::Gate g{t, {canvas_size.x * 0.5f, canvas_size.y * 0.5f}};
+                    if (t == GateType::XOR || t == GateType::XNOR) {
+                        g.size = {120.0f, 80.0f};
+                    }
+                    g.position.x -= g.size.x * 0.5f;
+                    g.position.y -= g.size.y * 0.5f;
+                    gates.push_back(g);
+                    m_selected_gate = static_cast<int>(gates.size()) - 1;
+                    m_dragging_gate = -1;
+                }
+            }
+
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
                 m_selected = t;
                 ImGui::SetDragDropPayload("NETRA_GATE", &m_selected, sizeof(m_selected));
@@ -84,11 +109,17 @@ void GateEditor::draw(netra::graphics::Window& window,
     }
     ImGui::End();
 
-    // Fixed canvas on the top-right
-    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + palette_w, vp->Pos.y + menu_h), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(vp->Size.x - palette_w, vp->Size.y - menu_h), ImGuiCond_Always);
+    /* Canvas setup */
+    ImGui::SetNextWindowPos(canvas_pos, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(canvas_size, ImGuiCond_Always);
+    ImGuiWindowFlags canvasFlags =
+        fixed_flags |
+        ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoScrollWithMouse |
+        ImGuiWindowFlags_NoBackground;
 
-    if (ImGui::Begin("Canvas", nullptr, fixed_flags | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground)) {
+    if (ImGui::Begin("Canvas", nullptr, canvasFlags)) {
         const ImVec2 canvas_size = ImGui::GetContentRegionAvail();
         if (canvas_size.x <= 0.0f || canvas_size.y <= 0.0f) {
             ImGui::TextUnformatted("Canvas has no space.");
@@ -107,6 +138,9 @@ void GateEditor::draw(netra::graphics::Window& window,
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("NETRA_GATE")) {
                 auto t = *static_cast<const netra::graphics::GateType*>(payload->Data);
                 netra::graphics::Gate g{t, {mouse.x - origin.x, mouse.y - origin.y}};
+                if (t == netra::graphics::GateType::XOR || t == netra::graphics::GateType::XNOR) {
+                    g.size = {120.0f, 80.0f};
+                }
                 g.position.x -= g.size.x * 0.5f;
                 g.position.y -= g.size.y * 0.5f;
                 gates.push_back(g);
@@ -147,15 +181,16 @@ void GateEditor::draw(netra::graphics::Window& window,
             m_dragging_gate = -1;
         }
 
-        // Render gates using your shader-based renderer into this region.
-        // Convert ImGui top-left origin to OpenGL bottom-left origin.
-        const int vx = static_cast<int>(origin.x);
-        const int vy = static_cast<int>(window.height() - (origin.y + canvas_size.y));
+        // Shader based gates rendering.
+        // ImGui uses top-left origin; OpenGL viewport/scissor uses bottom-left.
+        // Use only ImGui viewport coordinates here to avoid framebuffer/window-size desync during resize.
+        const int vx = static_cast<int>(origin.x - vp->Pos.x);
+        const int vy = static_cast<int>(vp->Size.y - ((origin.y - vp->Pos.y) + canvas_size.y));
         const int vw = static_cast<int>(canvas_size.x);
         const int vh = static_cast<int>(canvas_size.y);
         renderer.render_region(gates, vx, vy, vw, vh);
 
-        // Highlight selected gate (simple outline overlay)
+        // Highlight selected gate (outline overlay)
         if (m_selected_gate >= 0 && m_selected_gate < static_cast<int>(gates.size())) {
             auto& g = gates[static_cast<std::size_t>(m_selected_gate)];
             ImDrawList* dl = ImGui::GetWindowDrawList();
