@@ -6,6 +6,7 @@ add_library(netra_graphics STATIC
     src/shader.cpp
     src/window.cpp
     src/imgui_layer.cpp
+    src/grid.cpp
 )
 
 target_include_directories(netra_graphics PUBLIC
