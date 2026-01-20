@@ -12,6 +12,5 @@ target_include_directories(netra PRIVATE
 
 target_link_libraries(netra PRIVATE
     netra_engine
-    netra_graphics
     imgui
 )

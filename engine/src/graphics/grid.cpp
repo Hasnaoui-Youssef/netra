@@ -1,4 +1,4 @@
-#include "grid.hpp"
+#include <graphics/grid.hpp>
 #include <cmath>
 
 namespace netra::graphics {

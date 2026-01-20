@@ -114,7 +114,6 @@ target_include_directories(boost_headers INTERFACE ${boost_SOURCE_DIR})
 # ------------------------------------------------------------------------------
 add_subdirectory(common)
 add_subdirectory(engine)
-add_subdirectory(graphics)
 add_subdirectory(app)
 
 if(NETRA_BUILD_TESTS)

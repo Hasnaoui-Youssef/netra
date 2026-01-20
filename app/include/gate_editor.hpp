@@ -1,8 +1,8 @@
 #pragma once
 
 #include <gates.hpp>
-#include <renderer.hpp>
-#include <window.hpp>
+#include <graphics/renderer.hpp>
+#include <graphics/window.hpp>
 
 #include <imgui.h>
 #include <vector>

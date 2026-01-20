@@ -1,4 +1,4 @@
-#include "renderer.hpp"
+#include <graphics/renderer.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <fstream>
 #include <sstream>

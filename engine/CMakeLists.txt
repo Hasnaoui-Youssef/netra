@@ -6,6 +6,11 @@ add_library(netra_engine STATIC
     src/components/components.cpp
     src/components/render_components.cpp
     src/systems/simulation.cpp
+    src/graphics/renderer.cpp
+    src/graphics/shader.cpp
+    src/graphics/window.cpp
+    src/graphics/imgui_layer.cpp
+    src/graphics/grid.cpp
 )
 
 target_include_directories(netra_engine PUBLIC
@@ -16,4 +21,9 @@ target_include_directories(netra_engine PUBLIC
 target_link_libraries(netra_engine PUBLIC
     netra_common
     boost_headers
+    imgui
+    glad
+    glfw
+    glm
+    OpenGL::GL
 )

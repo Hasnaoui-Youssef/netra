@@ -1,9 +1,9 @@
 #include <gate_editor.hpp>
 
-#include <imgui_layer.hpp>
+#include <graphics/imgui_layer.hpp>
 #include <gates.hpp>
-#include <renderer.hpp>
-#include <window.hpp>
+#include <graphics/renderer.hpp>
+#include <graphics/window.hpp>
 
 #include <glad/glad.h>
 
