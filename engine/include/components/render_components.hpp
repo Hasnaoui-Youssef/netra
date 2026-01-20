@@ -53,10 +53,18 @@ struct PortGridPosition {
 
 // A user-authored wire entity.
 // Points are in canvas grid coordinates; endpoints can be implicit via ports.
+// A wire always references a signal (multiple wires may share the same signal for fanout).
 struct Wire {
-    Entity from_port{};
-    Entity to_port{};
-    std::vector<GridCoord> points; // optional polyline points (may include endpoints)
+    Entity signal{};           // The signal this wire carries
+    Entity from_endpoint{};    // Port or wire point this wire starts from
+    Entity to_endpoint{};      // Port or wire point this wire ends at
+    std::vector<GridCoord> points; // Polyline points (excluding endpoints)
+};
+
+// Marker component for a wire junction point (where wires can connect).
+// Attached to wire entities; the junction position is one of the wire's points.
+struct WireJunction {
+    std::size_t point_index = 0; // Index into Wire::points where junction exists
 };
 
 } // namespace netra

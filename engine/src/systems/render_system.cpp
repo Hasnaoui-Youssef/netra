@@ -241,12 +241,14 @@ void RenderSystem::render_wires(const glm::mat4& view_proj, glm::vec2 viewport_s
 
     glBindVertexArray(m_line_vao);
 
+    // Render committed wires
     m_world.view<Wire>().each(
         [&](Entity, Wire& wire) {
             std::vector<glm::vec2> points;
 
-            if (wire.from_port.valid()) {
-                if (auto* pos = m_world.get<PortGridPosition>(wire.from_port)) {
+            // Start endpoint (port or junction)
+            if (wire.from_endpoint.valid()) {
+                if (auto* pos = m_world.get<PortGridPosition>(wire.from_endpoint)) {
                     points.push_back(m_grid.to_glm_vec2(pos->position));
                 }
             }
@@ -255,8 +257,9 @@ void RenderSystem::render_wires(const glm::mat4& view_proj, glm::vec2 viewport_s
                 points.push_back(m_grid.to_glm_vec2(grid_pt));
             }
 
-            if (wire.to_port.valid()) {
-                if (auto* pos = m_world.get<PortGridPosition>(wire.to_port)) {
+            // End endpoint (port or junction)
+            if (wire.to_endpoint.valid()) {
+                if (auto* pos = m_world.get<PortGridPosition>(wire.to_endpoint)) {
                     points.push_back(m_grid.to_glm_vec2(pos->position));
                 }
             }
@@ -272,6 +275,55 @@ void RenderSystem::render_wires(const glm::mat4& view_proj, glm::vec2 viewport_s
             glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(points.size()));
         }
     );
+
+    // Render in-progress wire (preview)
+    if (m_editor.wiring.active) {
+        m_wire_shader.set_vec4("u_color", {0.5f, 0.8f, 1.0f, 0.8f}); // Distinct preview color
+
+        std::vector<glm::vec2> preview_points;
+
+        // Start from endpoint if available
+        if (m_editor.wiring.start_endpoint.valid()) {
+            if (auto* pos = m_world.get<PortGridPosition>(m_editor.wiring.start_endpoint)) {
+                preview_points.push_back(m_grid.to_glm_vec2(pos->position));
+            }
+        }
+
+        for (const auto& grid_pt : m_editor.wiring.points) {
+            preview_points.push_back(m_grid.to_glm_vec2(grid_pt));
+        }
+
+        // Add orthogonal rubber band to mouse position
+        GridCoord mouse_pos = m_editor.wiring.mouse_grid_pos;
+        if (!preview_points.empty()) {
+            // Get last point in grid coords
+            GridCoord last_grid{};
+            if (!m_editor.wiring.points.empty()) {
+                last_grid = m_editor.wiring.points.back();
+            } else if (m_editor.wiring.start_endpoint.valid()) {
+                if (auto* pos = m_world.get<PortGridPosition>(m_editor.wiring.start_endpoint)) {
+                    last_grid = pos->position;
+                }
+            }
+
+            // Add orthogonal corner if needed (horizontal first, then vertical)
+            if (last_grid.x != mouse_pos.x && last_grid.y != mouse_pos.y) {
+                GridCoord corner{mouse_pos.x, last_grid.y};
+                preview_points.push_back(m_grid.to_glm_vec2(corner));
+            }
+        }
+        preview_points.push_back(m_grid.to_glm_vec2(mouse_pos));
+
+        if (preview_points.size() >= 2) {
+            glBindBuffer(GL_ARRAY_BUFFER, m_line_vbo);
+            glBufferData(GL_ARRAY_BUFFER,
+                         static_cast<GLsizeiptr>(preview_points.size() * sizeof(glm::vec2)),
+                         preview_points.data(),
+                         GL_DYNAMIC_DRAW);
+
+            glDrawArrays(GL_LINE_STRIP, 0, static_cast<GLsizei>(preview_points.size()));
+        }
+    }
 
     glBindVertexArray(0);
 }

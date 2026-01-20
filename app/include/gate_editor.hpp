@@ -54,6 +54,20 @@ private:
 
     // Get first port on given side
     Entity get_port_on_side(Entity module, PortSide side);
+
+    // Wiring mode helpers
+    void toggle_wiring_mode();
+    void handle_wiring_click(GridCoord grid_pos);
+    void handle_wiring_escape();
+    Entity find_port_at(GridCoord grid_pos) const;
+    Entity find_wire_point_at(GridCoord grid_pos) const;
+    bool is_valid_wire_endpoint(Entity endpoint) const;
+    bool are_ports_on_same_module(Entity port_a, Entity port_b) const;
+    bool does_segment_intersect_module(GridCoord from, GridCoord to) const;
+    GridCoord compute_orthogonal_corner(GridCoord from, GridCoord to) const;
+    void commit_wire();
+    void cancel_wire();
+    void delete_wire(Entity wire);
 };
 
 } // namespace netra::app
