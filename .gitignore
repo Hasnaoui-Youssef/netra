@@ -1,6 +1,6 @@
 /.cache/*
-build/*
-build_tests/*
+/build/*
+/build_tests/*
 /cmake-build*/
 /bld/
 CMakeCache.txt
