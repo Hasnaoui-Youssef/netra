@@ -1,11 +1,12 @@
+#include <gates.hpp>
 #include <gate_editor.hpp>
 
 #include <imgui.h>
 
 namespace netra::app {
 
-static const char* gate_type_label(netra::graphics::GateType type) {
-    using netra::graphics::GateType;
+static const char* gate_type_label(netra::GateType type) {
+    using netra::GateType;
     switch (type) {
         case GateType::AND: return "AND";
         case GateType::NAND: return "NAND";
@@ -72,7 +73,7 @@ void GateEditor::draw(netra::graphics::Window& window,
         ImGuiWindowFlags_NoTitleBar;
 
     if (ImGui::Begin("Palette", nullptr, fixed_flags)) {
-        using netra::graphics::GateType;
+        using netra::GateType;
         static const GateType types[] = {
             GateType::AND, GateType::NAND, GateType::OR, GateType::NOR,
             GateType::XOR, GateType::XNOR, GateType::NOT
@@ -136,9 +137,9 @@ void GateEditor::draw(netra::graphics::Window& window,
         // Drop target: place gate at mouse
         if (ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("NETRA_GATE")) {
-                auto t = *static_cast<const netra::graphics::GateType*>(payload->Data);
+                auto t = *static_cast<const netra::GateType*>(payload->Data);
                 netra::graphics::Gate g{t, {mouse.x - origin.x, mouse.y - origin.y}};
-                if (t == netra::graphics::GateType::XOR || t == netra::graphics::GateType::XNOR) {
+                if (t == netra::GateType::XOR || t == netra::GateType::XNOR) {
                     g.size = {120.0f, 80.0f};
                 }
                 g.position.x -= g.size.x * 0.5f;

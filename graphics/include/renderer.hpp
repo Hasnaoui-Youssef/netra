@@ -1,30 +1,12 @@
 #pragma once
 
+#include <gates.hpp>
 #include "shader.hpp"
 #include "window.hpp"
-#include <glm/glm.hpp>
 #include <vector>
 #include <array>
 
 namespace netra::graphics {
-
-enum class GateType {
-    AND,
-    NAND,
-    OR,
-    NOR,
-    XOR,
-    XNOR,
-    NOT,
-    COUNT
-};
-
-struct Gate {
-    GateType type;
-    glm::vec2 position;
-    glm::vec2 size{100.0f, 80.0f};
-    bool dragging = false;
-};
 
 class Renderer {
 public:

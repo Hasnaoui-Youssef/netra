@@ -1,18 +1,17 @@
 #pragma once
 
+#include <grid_coord.hpp>
+
 #include "glm/vec2.hpp"
 #include <cstdint>
 #include <optional>
 
 namespace netra::graphics {
 
-struct GridCoord {
-    std::int32_t x = 0;
-    std::int32_t y = 0;
-};
+using GridCoord = netra::GridCoord;
 
 // Canvas-local grid.
-// Origin is the top-left corner of the canvas (0,0), expressed in pixels.
+// Origin is the top-left corner of the canvas (0,0).
 // All grid coordinates are integer units; conversion to pixels is done via unit_px.
 class Grid {
 public:
@@ -26,8 +25,8 @@ public:
     // Exact conversion: no snapping/rounding.
     [[nodiscard]] glm::vec2 to_glm_vec2(GridCoord grid) const noexcept;
 
-    // Returns a grid coordinate only if the pixel coordinate lies exactly on the grid.
-    [[nodiscard]] std::optional<GridCoord> pixels_to_grid(glm::vec2 px) const noexcept;
+    // Returns the nearest pixel coordinate that lies exactly on the grid.
+    [[nodiscard]] std::optional<glm::ivec2> pixels_to_grid_pixels(glm::vec2 px) const noexcept;
 
 private:
     unit_t m_unit_px = 5;

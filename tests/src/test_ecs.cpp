@@ -52,14 +52,14 @@ TEST(component_add_get) {
     World world;
     Entity e = world.create();
     
-    world.emplace<Transform>(e, 10.0f, 20.0f, 100.0f, 80.0f);
+    world.emplace<Transform>(e, 10, 20, 100, 80);
     
     ASSERT(world.has<Transform>(e));
     
     auto* t = world.get<Transform>(e);
     ASSERT(t != nullptr);
-    ASSERT_EQ(t->x, 10.0f);
-    ASSERT_EQ(t->y, 20.0f);
+    ASSERT_EQ(t->x, 10);
+    ASSERT_EQ(t->y, 20);
     
     return true;
 }
@@ -68,7 +68,7 @@ TEST(component_remove) {
     World world;
     Entity e = world.create();
     
-    world.emplace<Transform>(e, 0.0f, 0.0f, 0.0f, 0.0f);
+    world.emplace<Transform>(e, 0, 0, 0, 0);
     ASSERT(world.has<Transform>(e));
     
     world.remove<Transform>(e);
@@ -82,7 +82,7 @@ TEST(component_cleanup_on_destroy) {
     World world;
     Entity e = world.create();
     
-    world.emplace<Transform>(e, 0.0f, 0.0f, 0.0f, 0.0f);
+    world.emplace<Transform>(e, 0, 0, 0, 0);
     world.emplace<ModuleDef>(e, "test", false);
     
     world.destroy(e);
@@ -100,12 +100,12 @@ TEST(view_single_component) {
     Entity e2 = world.create();
     Entity e3 = world.create();
     
-    world.emplace<Transform>(e1, 1.0f, 0.0f, 0.0f, 0.0f);
-    world.emplace<Transform>(e2, 2.0f, 0.0f, 0.0f, 0.0f);
+    world.emplace<Transform>(e1, 1, 0, 0, 0);
+    world.emplace<Transform>(e2, 2, 0, 0, 0);
     // e3 has no Transform
     
     int count = 0;
-    float sum = 0.0f;
+    std::int32_t sum = 0;
     
     world.view<Transform>().each([&](Entity e, Transform& t) {
         ++count;
@@ -113,7 +113,7 @@ TEST(view_single_component) {
     });
     
     ASSERT_EQ(count, 2);
-    ASSERT_EQ(sum, 3.0f);
+    ASSERT_EQ(sum, 3);
     
     return true;
 }
@@ -125,10 +125,10 @@ TEST(view_multiple_components) {
     Entity e2 = world.create();
     Entity e3 = world.create();
     
-    world.emplace<Transform>(e1, 1.0f, 0.0f, 0.0f, 0.0f);
+    world.emplace<Transform>(e1, 1, 0, 0, 0);
     world.emplace<ModuleInst>(e1, "inst1", Entity{});
     
-    world.emplace<Transform>(e2, 2.0f, 0.0f, 0.0f, 0.0f);
+    world.emplace<Transform>(e2, 2, 0, 0, 0);
     // e2 has no ModuleInst
     
     world.emplace<ModuleInst>(e3, "inst3", Entity{});
@@ -139,7 +139,7 @@ TEST(view_multiple_components) {
     
     world.view<Transform, ModuleInst>().each([&](Entity e, Transform& t, ModuleInst& m) {
         ++count;
-        if (t.x != 1.0f) correct = false;
+        if (t.x != 1) correct = false;
         if (m.instance_name != "inst1") correct = false;
     });
     

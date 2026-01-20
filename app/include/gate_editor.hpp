@@ -1,5 +1,6 @@
 #pragma once
 
+#include <gates.hpp>
 #include <renderer.hpp>
 #include <window.hpp>
 
@@ -17,7 +18,7 @@ public:
               std::vector<netra::graphics::Gate>& gates);
 
 private:
-    netra::graphics::GateType m_selected = netra::graphics::GateType::AND;
+    netra::GateType m_selected = netra::GateType::AND;
 
     int m_selected_gate = -1;
     int m_dragging_gate = -1;

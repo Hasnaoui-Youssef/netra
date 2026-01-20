@@ -46,12 +46,12 @@ struct Hierarchy {
     std::vector<Entity> children;
 };
 
-// Transform for rendering
+// Transform in canvas grid coordinates (integer grid units).
 struct Transform {
-    float x = 0.0f;
-    float y = 0.0f;
-    float width = 100.0f;
-    float height = 80.0f;
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+    std::int32_t width = 100;
+    std::int32_t height = 80;
 };
 
 // Tag for identifying port entities on a specific side

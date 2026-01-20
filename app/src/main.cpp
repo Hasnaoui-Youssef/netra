@@ -1,6 +1,7 @@
 #include <gate_editor.hpp>
 
 #include <imgui_layer.hpp>
+#include <gates.hpp>
 #include <renderer.hpp>
 #include <window.hpp>
 

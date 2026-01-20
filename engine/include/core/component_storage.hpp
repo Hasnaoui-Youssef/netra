@@ -1,5 +1,7 @@
 #pragma once
 
+#include "entity.hpp"
+
 #include <types.hpp>
 #include <vector>
 #include <cassert>
@@ -16,7 +18,7 @@ public:
         if (entity >= m_sparse.size()) {
             m_sparse.resize(entity + 1, INVALID);
         }
-        
+
         if (m_sparse[entity] != INVALID) {
             m_dense_components[m_sparse[entity]] = std::move(component);
             return;

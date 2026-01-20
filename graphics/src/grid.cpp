@@ -23,13 +23,13 @@ glm::vec2 Grid::to_glm_vec2(GridCoord grid) const noexcept {
 
 //We will be rounding each value
 //This assumes both pixels and grid values start from the same origin (Top-Left corner)
-std::optional<GridCoord> Grid::pixels_to_grid(glm::vec2 px) const noexcept {
+std::optional<glm::ivec2> Grid::pixels_to_grid_pixels(glm::vec2 px) const noexcept {
     if (m_unit_px <= 0 || px.x < 0 || px.y < 0) return std::nullopt;
 
     const int rx = static_cast<int>(std::round(px.x / m_unit_px) * m_unit_px);
-    const int ry = static_cast<int>(std::round(px.y / m_unit_px) * m_unit_px) ;
+    const int ry = static_cast<int>(std::round(px.y / m_unit_px) * m_unit_px);
 
-    return GridCoord{rx, ry};
+    return glm::ivec2{rx, ry};
 }
 
 } // namespace netra::graphics
