@@ -6,11 +6,13 @@ add_library(netra_engine STATIC
     src/components/components.cpp
     src/components/render_components.cpp
     src/systems/simulation.cpp
-    src/graphics/renderer.cpp
+    src/systems/layout_system.cpp
+    src/systems/render_system.cpp
     src/graphics/shader.cpp
     src/graphics/window.cpp
     src/graphics/imgui_layer.cpp
     src/graphics/grid.cpp
+    src/graphics/camera2d.cpp
 )
 
 target_include_directories(netra_engine PUBLIC

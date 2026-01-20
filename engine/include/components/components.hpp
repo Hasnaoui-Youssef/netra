@@ -46,12 +46,6 @@ struct Hierarchy {
     std::vector<Entity> children;
 };
 
-// Tag for identifying port entities on a specific side
-struct PortLayout {
-    std::size_t index = 0;
-    std::size_t total = 1;
-};
-
 // Value storage for simulation
 // How is this meant to work:
 // A module defines the transformation of values from its input ports to output ports

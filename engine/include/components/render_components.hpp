@@ -16,11 +16,23 @@ enum class PortSide : std::uint8_t {
     Bottom,
 };
 
-// Canvas transform expressed in integer grid coordinates.
-// Interpretation of units is owned by the active Grid.
-struct CanvasTransform {
-    GridCoord position{0, 0}; // top-left
-    GridCoord size{0, 0};     // width/height in the same units as position
+// Module extent in grid units (ensures both edges align to grid).
+struct ModuleExtent {
+    std::int32_t width = 1;
+    std::int32_t height = 1;
+};
+
+// Module render position in pixels (derived from port grid positions).
+struct ModulePixelPosition {
+    float x = 0.0f;
+    float y = 0.0f;
+};
+
+// Port offset from module top-left corner in grid units.
+// Authored when creating module definition.
+struct PortOffset {
+    std::int32_t x = 0;
+    std::int32_t y = 0;
 };
 
 // Rendering association for an entity (e.g. module instance box, primitive gate symbol, etc.).
@@ -29,11 +41,12 @@ struct ShaderKey {
     std::string key;
 };
 
+// Which side the port is on (for visual orientation of pin/arrow).
 struct PortVisual {
     PortSide side = PortSide::Left;
 };
 
-// Cached port position in canvas grid coordinates.
+// Cached port position in canvas grid coordinates (derived from module position + offset).
 struct PortGridPosition {
     GridCoord position{0, 0};
 };
