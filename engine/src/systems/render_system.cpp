@@ -17,6 +17,8 @@ RenderSystem::RenderSystem(World& world, graphics::Grid& grid, EditorState& edit
     , m_editor(editor) {}
 
 RenderSystem::~RenderSystem() {
+    if (m_gate_vao) glDeleteVertexArrays(1, &m_gate_vao);
+    if (m_gate_vbo) glDeleteBuffers(1, &m_gate_vbo);
     if (m_quad_vao) glDeleteVertexArrays(1, &m_quad_vao);
     if (m_quad_vbo) glDeleteBuffers(1, &m_quad_vbo);
     if (m_line_vao) glDeleteVertexArrays(1, &m_line_vao);
@@ -24,6 +26,7 @@ RenderSystem::~RenderSystem() {
 }
 
 void RenderSystem::init(const std::string& shader_dir) {
+    setup_gate_quad();
     setup_quad();
     setup_line();
     load_gate_shaders(shader_dir);
@@ -54,10 +57,37 @@ void RenderSystem::init(const std::string& shader_dir) {
     m_wire_shader = graphics::Shader(solid_vert, solid_frag);
 }
 
-void RenderSystem::setup_quad() {
-    // Unit quad [0,1] x [0,1], top-left origin
+void RenderSystem::setup_gate_quad() {
+    // Fullscreen quad [-1,1] with UVs for SDF gate shaders
     float vertices[] = {
-        // pos
+        // pos        // uv
+        -1.0f,  1.0f, 0.0f, 1.0f,
+        -1.0f, -1.0f, 0.0f, 0.0f,
+         1.0f, -1.0f, 1.0f, 0.0f,
+
+        -1.0f,  1.0f, 0.0f, 1.0f,
+         1.0f, -1.0f, 1.0f, 0.0f,
+         1.0f,  1.0f, 1.0f, 1.0f,
+    };
+
+    glGenVertexArrays(1, &m_gate_vao);
+    glGenBuffers(1, &m_gate_vbo);
+
+    glBindVertexArray(m_gate_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, m_gate_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glBindVertexArray(0);
+}
+
+void RenderSystem::setup_quad() {
+    // Unit quad [0,1] x [0,1] for solid color primitives
+    float vertices[] = {
         0.0f, 0.0f,
         0.0f, 1.0f,
         1.0f, 1.0f,
@@ -86,7 +116,6 @@ void RenderSystem::setup_line() {
 
     glBindVertexArray(m_line_vao);
     glBindBuffer(GL_ARRAY_BUFFER, m_line_vbo);
-    // Dynamic buffer, allocate later per-draw
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), nullptr);
@@ -114,16 +143,19 @@ void RenderSystem::load_gate_shaders(const std::string& shader_dir) {
     }
 }
 
-void RenderSystem::render(glm::vec2 viewport_size) {
+void RenderSystem::render(glm::vec2 viewport_size, Entity dragging_module) {
     render_region(viewport_size, 0, 0,
                   static_cast<int>(viewport_size.x),
-                  static_cast<int>(viewport_size.y));
+                  static_cast<int>(viewport_size.y),
+                  dragging_module);
 }
 
-void RenderSystem::render_region(glm::vec2 viewport_size, int x, int y, int width, int height) {
+void RenderSystem::render_region(glm::vec2 viewport_size, int x, int y, int width, int height, Entity dragging_module) {
     if (width <= 0 || height <= 0) return;
 
     glEnable(GL_SCISSOR_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glViewport(x, y, width, height);
     glScissor(x, y, width, height);
 
@@ -134,13 +166,14 @@ void RenderSystem::render_region(glm::vec2 viewport_size, int x, int y, int widt
 
     render_modules(view_proj, viewport_size);
     render_wires(view_proj, viewport_size);
-    render_ports(view_proj, viewport_size);
+    render_ports(view_proj, viewport_size, dragging_module);
 
+    glDisable(GL_BLEND);
     glDisable(GL_SCISSOR_TEST);
 }
 
 void RenderSystem::render_modules(const glm::mat4& view_proj, glm::vec2 viewport_size) {
-    glBindVertexArray(m_quad_vao);
+    glBindVertexArray(m_gate_vao);
 
     m_world.view<ModuleInst, ModulePixelPosition, ModuleExtent, ShaderKey>().each(
         [&](Entity, ModuleInst&, ModulePixelPosition& pos, ModuleExtent& extent, ShaderKey& shader_key) {
@@ -154,8 +187,7 @@ void RenderSystem::render_modules(const glm::mat4& view_proj, glm::vec2 viewport
             float width_px = static_cast<float>(extent.width * m_grid.unit_px());
             float height_px = static_cast<float>(extent.height * m_grid.unit_px());
 
-            // The existing gate shaders expect u_position/u_size in NDC
-            // Convert pixel position to NDC for compatibility
+            // Gate shaders expect u_position (top-left in NDC) and u_size (in NDC)
             glm::vec2 ndc_pos = m_editor.camera.to_ndc({pos.x, pos.y}, viewport_size);
             glm::vec2 ndc_size{
                 (width_px * m_editor.camera.zoom / viewport_size.x) * 2.0f,
@@ -172,19 +204,23 @@ void RenderSystem::render_modules(const glm::mat4& view_proj, glm::vec2 viewport
     glBindVertexArray(0);
 }
 
-void RenderSystem::render_ports(const glm::mat4& view_proj, glm::vec2 viewport_size) {
+void RenderSystem::render_ports(const glm::mat4& view_proj, glm::vec2 viewport_size, Entity dragging_module) {
     glBindVertexArray(m_quad_vao);
     m_port_shader.use();
     m_port_shader.set_mat4("u_view_proj", view_proj);
-    m_port_shader.set_vec4("u_color", {0.0f, 0.0f, 0.0f, 1.0f}); // black
+    m_port_shader.set_vec4("u_color", {0.0f, 0.0f, 0.0f, 1.0f});
 
-    float port_size = static_cast<float>(m_grid.unit_px()) * 0.6f; // slightly smaller than grid cell
+    float port_size = static_cast<float>(m_grid.unit_px()) * 0.6f;
 
     m_world.view<Port, PortGridPosition>().each(
-        [&](Entity, Port&, PortGridPosition& grid_pos) {
+        [&](Entity, Port& port, PortGridPosition& grid_pos) {
+            // Skip ports of dragging module
+            if (dragging_module.valid() && port.owner == dragging_module) {
+                return;
+            }
+
             glm::vec2 pixel_pos = m_grid.to_glm_vec2(grid_pos.position);
 
-            // Center the port on the grid position
             m_port_shader.set_vec2("u_position", {pixel_pos.x - port_size * 0.5f,
                                                    pixel_pos.y - port_size * 0.5f});
             m_port_shader.set_vec2("u_size", {port_size, port_size});
@@ -199,7 +235,7 @@ void RenderSystem::render_ports(const glm::mat4& view_proj, glm::vec2 viewport_s
 void RenderSystem::render_wires(const glm::mat4& view_proj, glm::vec2 viewport_size) {
     m_wire_shader.use();
     m_wire_shader.set_mat4("u_view_proj", view_proj);
-    m_wire_shader.set_vec4("u_color", {0.2f, 0.8f, 0.2f, 1.0f}); // green
+    m_wire_shader.set_vec4("u_color", {0.2f, 0.8f, 0.2f, 1.0f});
     m_wire_shader.set_vec2("u_position", {0.0f, 0.0f});
     m_wire_shader.set_vec2("u_size", {1.0f, 1.0f});
 
@@ -209,19 +245,16 @@ void RenderSystem::render_wires(const glm::mat4& view_proj, glm::vec2 viewport_s
         [&](Entity, Wire& wire) {
             std::vector<glm::vec2> points;
 
-            // Start from from_port if valid
             if (wire.from_port.valid()) {
                 if (auto* pos = m_world.get<PortGridPosition>(wire.from_port)) {
                     points.push_back(m_grid.to_glm_vec2(pos->position));
                 }
             }
 
-            // Add intermediate points
             for (const auto& grid_pt : wire.points) {
                 points.push_back(m_grid.to_glm_vec2(grid_pt));
             }
 
-            // End at to_port if valid
             if (wire.to_port.valid()) {
                 if (auto* pos = m_world.get<PortGridPosition>(wire.to_port)) {
                     points.push_back(m_grid.to_glm_vec2(pos->position));

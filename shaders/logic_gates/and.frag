@@ -43,13 +43,15 @@ float sdLine(vec2 p, vec2 a, vec2 b) {
 }
 
 void main() {
-    float d = sdLine(uv, vec2(-0.5, 0.5), vec2(-0.5, -0.5));
-    d = min(d, sdLine(uv, vec2(-0.5, 0.5), vec2(0.0, 0.5)));
-    d = min(d, sdLine(uv, vec2(-0.5, -0.5), vec2(0.0, -0.5)));
-    d = min(d, sdBezier(uv, vec2(0.0, 0.5), vec2(0.7, 0.0), vec2(0.0, -0.5)));
+    // AND gate shape scaled to fill [-1, 1]
+    // Left edge, top/bottom edges, right bezier curve
+    float d = sdLine(uv, vec2(-1.0, 1.0), vec2(-1.0, -1.0));
+    d = min(d, sdLine(uv, vec2(-1.0, 1.0), vec2(0.0, 1.0)));
+    d = min(d, sdLine(uv, vec2(-1.0, -1.0), vec2(0.0, -1.0)));
+    d = min(d, sdBezier(uv, vec2(0.0, 1.0), vec2(1.4, 0.0), vec2(0.0, -1.0)));
 
-    float stroke = 0.01;
     float aa = fwidth(d);
+    float stroke = max(0.03, aa * 1.5);
     float mask = 1.0 - smoothstep(stroke - aa, stroke + aa, d);
 
     FragColor = vec4(1.0, 0.0, 0.0, mask);

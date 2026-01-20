@@ -12,6 +12,7 @@ int main() {
     imgui.init(window);
 
     netra::app::GateEditor editor;
+    editor.init("shaders/logic_gates");
 
     while (!window.should_close()) {
         window.poll_events();

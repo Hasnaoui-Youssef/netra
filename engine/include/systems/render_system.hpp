@@ -25,15 +25,19 @@ public:
     RenderSystem& operator=(RenderSystem&&) = delete;
 
     void init(const std::string& shader_dir);
-    void render(glm::vec2 viewport_size);
-    void render_region(glm::vec2 viewport_size, int x, int y, int width, int height);
+    void render(glm::vec2 viewport_size, Entity dragging_module = Entity{});
+    void render_region(glm::vec2 viewport_size, int x, int y, int width, int height, Entity dragging_module = Entity{});
 
 private:
     World& m_world;
     graphics::Grid& m_grid;
     EditorState& m_editor;
 
-    // Quad geometry (for modules and ports)
+    // Gate quad: [-1,1] with UVs for SDF shaders
+    GLuint m_gate_vao = 0;
+    GLuint m_gate_vbo = 0;
+
+    // Simple quad: [0,1] for solid color primitives
     GLuint m_quad_vao = 0;
     GLuint m_quad_vbo = 0;
 
@@ -48,12 +52,13 @@ private:
     graphics::Shader m_port_shader;
     graphics::Shader m_wire_shader;
 
+    void setup_gate_quad();
     void setup_quad();
     void setup_line();
     void load_gate_shaders(const std::string& shader_dir);
 
     void render_modules(const glm::mat4& view_proj, glm::vec2 viewport_size);
-    void render_ports(const glm::mat4& view_proj, glm::vec2 viewport_size);
+    void render_ports(const glm::mat4& view_proj, glm::vec2 viewport_size, Entity dragging_module);
     void render_wires(const glm::mat4& view_proj, glm::vec2 viewport_size);
 
     std::string load_file(const std::string& path);

@@ -37,19 +37,22 @@ float sdBezier(vec2 pos, vec2 p0, vec2 p1, vec2 p2) {
 }
 
 void main() {
-    float d = sdBezier(uv, vec2(-0.5, 0.5), vec2(-0.2, 0.0), vec2(-0.5, -0.5));
-    d = min(d, sdBezier(uv, vec2(-0.5, 0.5), vec2(0.3, 0.5), vec2(0.5, 0.0)));
-    d = min(d, sdBezier(uv, vec2(-0.5, -0.5), vec2(0.3, -0.5), vec2(0.5, 0.0)));
-    d = min(d, sdBezier(uv, vec2(-0.7, 0.5), vec2(-0.4, 0.0), vec2(-0.7, -0.5)));
+    // XNOR gate: XOR body + inversion bubble, scaled to [-1, 1]
+    float d = sdBezier(uv, vec2(-0.7, 1.0), vec2(-0.3, 0.0), vec2(-0.7, -1.0));
+    d = min(d, sdBezier(uv, vec2(-0.7, 1.0), vec2(0.2, 1.0), vec2(0.65, 0.0)));
+    d = min(d, sdBezier(uv, vec2(-0.7, -1.0), vec2(0.2, -1.0), vec2(0.65, 0.0)));
+    d = min(d, sdBezier(uv, vec2(-1.0, 1.0), vec2(-0.6, 0.0), vec2(-1.0, -1.0)));
 
-    float dotDist = abs(length(uv - vec2(0.62, 0.0)) - 0.1);
+    // Inversion bubble at right edge
+    float dotDist = abs(length(uv - vec2(0.85, 0.0)) - 0.15);
 
-    float stroke = 0.01;
-    float aa_d = fwidth(d) * 1.5;
-    float aa_dot = fwidth(dotDist) * 1.5;
+    float aa_d = fwidth(d);
+    float aa_dot = fwidth(dotDist);
+    float stroke = max(0.03, aa_d * 1.5);
+    float stroke_dot = max(0.03, aa_dot * 1.5);
 
-    float bodyMask = smoothstep(stroke + aa_d, stroke - aa_d, d);
-    float dotMask = smoothstep(stroke + aa_dot, stroke - aa_dot, dotDist);
+    float bodyMask = 1.0 - smoothstep(stroke - aa_d, stroke + aa_d, d);
+    float dotMask = 1.0 - smoothstep(stroke_dot - aa_dot, stroke_dot + aa_dot, dotDist);
 
     vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), dotMask);
     float alpha = max(bodyMask, dotMask);

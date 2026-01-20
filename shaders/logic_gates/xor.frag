@@ -37,13 +37,14 @@ float sdBezier(vec2 pos, vec2 p0, vec2 p1, vec2 p2) {
 }
 
 void main() {
-    float d = sdBezier(uv, vec2(-0.5, 0.5), vec2(-0.2, 0.0), vec2(-0.5, -0.5));
-    d = min(d, sdBezier(uv, vec2(-0.5, 0.5), vec2(0.3, 0.5), vec2(0.7, 0.0)));
-    d = min(d, sdBezier(uv, vec2(-0.5, -0.5), vec2(0.3, -0.5), vec2(0.7, 0.0)));
-    d = min(d, sdBezier(uv, vec2(-0.7, 0.5), vec2(-0.4, 0.0), vec2(-0.7, -0.5)));
+    // XOR gate: OR body + extra back curve, scaled to [-1, 1]
+    float d = sdBezier(uv, vec2(-0.7, 1.0), vec2(-0.3, 0.0), vec2(-0.7, -1.0));
+    d = min(d, sdBezier(uv, vec2(-0.7, 1.0), vec2(0.3, 1.0), vec2(1.0, 0.0)));
+    d = min(d, sdBezier(uv, vec2(-0.7, -1.0), vec2(0.3, -1.0), vec2(1.0, 0.0)));
+    d = min(d, sdBezier(uv, vec2(-1.0, 1.0), vec2(-0.6, 0.0), vec2(-1.0, -1.0)));
 
-    float stroke = 0.01;
     float aa = fwidth(d);
+    float stroke = max(0.03, aa * 1.5);
     float mask = 1.0 - smoothstep(stroke - aa, stroke + aa, d);
 
     FragColor = vec4(1.0, 0.0, 0.0, mask);
