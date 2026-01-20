@@ -345,7 +345,6 @@ The project currently contains the following top-level directories:
 - `app`
 - `common`
 - `glad`
-- `graphics`
 - `shaders`
 - `tests`
 
