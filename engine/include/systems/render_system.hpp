@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/entity.hpp"
+#include <components/render_components.hpp>
 #include <core/world.hpp>
 #include <editor_state.hpp>
 #include <graphics/grid.hpp>
@@ -16,52 +18,58 @@ namespace netra {
 // Iterates world components and issues OpenGL draw calls.
 class RenderSystem {
 public:
-    RenderSystem(World& world, graphics::Grid& grid, EditorState& editor);
-    ~RenderSystem();
+  RenderSystem(World &world, graphics::Grid &grid, EditorState &editor);
+  ~RenderSystem();
 
-    RenderSystem(const RenderSystem&) = delete;
-    RenderSystem& operator=(const RenderSystem&) = delete;
-    RenderSystem(RenderSystem&&) = delete;
-    RenderSystem& operator=(RenderSystem&&) = delete;
+  RenderSystem(const RenderSystem &) = delete;
+  RenderSystem &operator=(const RenderSystem &) = delete;
+  RenderSystem(RenderSystem &&) = delete;
+  RenderSystem &operator=(RenderSystem &&) = delete;
 
-    void init(const std::string& shader_dir);
-    void render(glm::vec2 viewport_size, Entity dragging_module = Entity{});
-    void render_region(glm::vec2 viewport_size, int x, int y, int width, int height, Entity dragging_module = Entity{});
+  void init(const std::string &shader_dir);
+  void render(glm::vec2 viewport_size, Entity dragging_module = Entity{});
+  void render_region(glm::vec2 viewport_size, int x, int y, int width,
+                     int height, Entity dragging_module = Entity{});
 
 private:
-    World& m_world;
-    graphics::Grid& m_grid;
-    EditorState& m_editor;
+  World &m_world;
+  graphics::Grid &m_grid;
+  EditorState &m_editor;
 
-    // Gate quad: [-1,1] with UVs for SDF shaders
-    GLuint m_gate_vao = 0;
-    GLuint m_gate_vbo = 0;
+  // Gate quad: [-1,1] with UVs for SDF shaders
+  GLuint m_gate_vao = 0;
+  GLuint m_gate_vbo = 0;
 
-    // Simple quad: [0,1] for solid color primitives
-    GLuint m_quad_vao = 0;
-    GLuint m_quad_vbo = 0;
+  // Simple quad: [0,1] for solid color primitives
+  GLuint m_quad_vao = 0;
+  GLuint m_quad_vbo = 0;
 
-    // Line geometry (for wires)
-    GLuint m_line_vao = 0;
-    GLuint m_line_vbo = 0;
+  // Line geometry (for wires)
+  GLuint m_line_vao = 0;
+  GLuint m_line_vbo = 0;
 
-    // Shaders keyed by ShaderKey::key (e.g., "AND", "OR")
-    std::unordered_map<std::string, graphics::Shader> m_shaders;
+  // Shaders keyed by ShaderKey::key (e.g., "AND", "OR")
+  std::unordered_map<std::string, graphics::Shader> m_shaders;
 
-    // Simple shaders for ports and wires
-    graphics::Shader m_port_shader;
-    graphics::Shader m_wire_shader;
+  // Simple shaders for ports and wires
+  graphics::Shader m_port_shader;
+  graphics::Shader m_wire_shader;
 
-    void setup_gate_quad();
-    void setup_quad();
-    void setup_line();
-    void load_gate_shaders(const std::string& shader_dir);
+  void setup_gate_quad();
+  void setup_quad();
+  void setup_wire_mesh();
+  void load_gate_shaders(const std::string &shader_dir);
 
-    void render_modules(const glm::mat4& view_proj, glm::vec2 viewport_size);
-    void render_ports(const glm::mat4& view_proj, glm::vec2 viewport_size, Entity dragging_module);
-    void render_wires(const glm::mat4& view_proj, glm::vec2 viewport_size);
+  void render_modules(const glm::mat4 &view_proj, glm::vec2 viewport_size);
+  void render_ports(const glm::mat4 &view_proj, glm::vec2 viewport_size,
+                    Entity dragging_module);
+  void render_wires(const glm::mat4 &view_proj, glm::vec2 viewport_size);
+  void collect_committed_segments(WireSegments &segments, Entity e,
+                                  const Wire &wire);
+  void collect_preview_segments(WireSegments &segments, Entity e,
+                                const Wire &wire);
 
-    std::string load_file(const std::string& path);
+  std::string load_file(const std::string &path);
 };
 
 } // namespace netra

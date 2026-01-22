@@ -18,6 +18,7 @@ enum class EditorMode : std::uint8_t {
 // Not persisted; cleared on mode exit or wire completion.
 struct WiringState {
     std::vector<GridCoord> points;  // Points placed so far (in order)
+    std::vector<GridCoord> current_path; // Dynamic path from last point to mouse (A* preview)
     Entity start_endpoint{};        // Port or wire junction where wiring began
     GridCoord mouse_grid_pos{};     // Current mouse position in grid coords (for preview)
     bool active = false;            // True if currently placing a wire

@@ -9,6 +9,8 @@ namespace netra {
 struct GridCoord {
     std::int32_t x = 0;
     std::int32_t y = 0;
+
+    bool operator==(const GridCoord&) const = default;
 };
 
 } // namespace netra

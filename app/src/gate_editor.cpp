@@ -78,7 +78,7 @@ static void begin_top_menu_bar() {
 }
 
 GateEditor::GateEditor()
-    : m_grid(25)
+    : m_grid(10)
     , m_layout_system(m_world, m_grid)
     , m_render_system(m_world, m_grid, m_editor_state) {}
 
@@ -263,6 +263,30 @@ void GateEditor::draw(graphics::Window& window) {
             // Update mouse position for rubber band preview
             m_editor_state.wiring.mouse_grid_pos = snap_to_grid(mouse_canvas);
 
+            // Calculate dynamic path if active
+            if (m_editor_state.wiring.active) {
+                GridCoord start_pos{};
+                bool has_start = false;
+
+                if (!m_editor_state.wiring.points.empty()) {
+                    start_pos = m_editor_state.wiring.points.back();
+                    has_start = true;
+                } else if (m_editor_state.wiring.start_endpoint.valid()) {
+                    if (auto* pos = m_world.get<PortGridPosition>(m_editor_state.wiring.start_endpoint)) {
+                        start_pos = pos->position;
+                        has_start = true;
+                    }
+                }
+
+                if (has_start) {
+                    // Avoid re-calculating if mouse hasn't moved (optimization)
+                    // But we don't store last mouse pos easily here, A* is fast enough for now.
+
+                    // Route wire
+                    m_editor_state.wiring.current_path = m_layout_system.route_wire(start_pos, m_editor_state.wiring.mouse_grid_pos);
+                }
+            }
+
             // Wiring mode: click places points
             if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_canvas_hovered) {
                 GridCoord grid_pos = snap_to_grid(mouse_canvas);
@@ -379,6 +403,7 @@ void GateEditor::draw(graphics::Window& window) {
     ImGui::End();
 }
 
+// ... (toggle_wiring_mode)
 void GateEditor::toggle_wiring_mode() {
     if (m_editor_state.mode == EditorMode::Wiring) {
         // Exit wiring mode, cancel any in-progress wire
@@ -395,7 +420,7 @@ void GateEditor::toggle_wiring_mode() {
 void GateEditor::handle_wiring_click(GridCoord grid_pos) {
     auto& wiring = m_editor_state.wiring;
 
-    // Helper to get the last point in the wire (either from points or start endpoint)
+    // Helper to get the last point
     auto get_last_point = [&]() -> GridCoord {
         if (!wiring.points.empty()) {
             return wiring.points.back();
@@ -405,283 +430,223 @@ void GateEditor::handle_wiring_click(GridCoord grid_pos) {
                 return pos->position;
             }
         }
-        return grid_pos;
+        return grid_pos; // Should not happen if active
     };
 
-    if (!wiring.active) {
-        // Starting a new wire - check if clicking on a valid start point
-        Entity port = find_port_at(grid_pos);
-        Entity wire_point = find_wire_point_at(grid_pos);
+    Entity port = find_port_at(grid_pos);
+    Entity wire_point = find_wire_point_at(grid_pos);
 
+    // Validation: Can we click here?
+    // Must be a port OR a free cell (not blocked by module/wire).
+    // Note: wire_point is valid too.
+    bool is_blocked = m_layout_system.is_cell_blocked(grid_pos);
+    bool is_valid_click = port.valid() || wire_point.valid() || !is_blocked;
+
+    if (!is_valid_click) {
+        return; // Clicked on module interior or obstacle
+    }
+
+    if (!wiring.active) {
+        // Starting a new wire
+        // STRICT: Must start from a valid input (Port or Junction).
+        // User request: "wire creation should only start from a port" (or junction presumably)
         if (port.valid()) {
             wiring.active = true;
             wiring.start_endpoint = port;
             wiring.points.clear();
+            wiring.current_path.clear();
         } else if (wire_point.valid()) {
             wiring.active = true;
             wiring.start_endpoint = wire_point;
             wiring.points.clear();
-        } else {
-            // Starting from empty space - add the point, no endpoint yet
-            wiring.active = true;
-            wiring.start_endpoint = Entity{};
-            wiring.points.clear();
-            wiring.points.push_back(grid_pos);
+            wiring.current_path.clear();
         }
+        // Else: Ignore click on empty space
     } else {
-        // Continuing an existing wire
-        Entity port = find_port_at(grid_pos);
-        Entity wire_point = find_wire_point_at(grid_pos);
+        // Continuing/Finishing wire
+        // Commit the current preview path
+        if (!wiring.current_path.empty()) {
+            // Append current path to points
+            // Note: current_path includes start (last point) and end (mouse).
+            // We shouldn't duplicate the start point if it's already in points?
+            // A* returns [start, ... end].
+            // wiring.points usually ends with 'start'.
 
-        GridCoord last_point = get_last_point();
+            // If points is empty, start is start_endpoint pos.
+            // If points not empty, points.back() is start.
 
+            size_t start_idx = 0;
+            // If we have points, or start endpoint, the first point of current_path is redundant?
+            // Yes, A* path[0] == start.
+            if (!wiring.current_path.empty()) {
+                start_idx = 1;
+            }
+
+            for (size_t i = start_idx; i < wiring.current_path.size(); ++i) {
+                wiring.points.push_back(wiring.current_path[i]);
+            }
+        }
+
+        wiring.current_path.clear();
+
+        // Check completion
         if (port.valid() || wire_point.valid()) {
-            // Clicked on a valid endpoint - try to commit the wire
             Entity endpoint = port.valid() ? port : wire_point;
 
-            // Check if trying to connect ports on the same module
+            // Check if connecting to same module (invalid)
             if (port.valid() && wiring.start_endpoint.valid()) {
                 if (are_ports_on_same_module(wiring.start_endpoint, port)) {
-                    // Invalid: same module connection, ignore click
                     return;
                 }
             }
 
-            // Get endpoint position for orthogonal routing
-            GridCoord endpoint_pos = grid_pos;
-            if (auto* pos = m_world.get<PortGridPosition>(endpoint)) {
-                endpoint_pos = pos->position;
-            }
+            // Create wire
+             // Create the wire entity
+            Entity wire_entity = m_world.create();
 
-            // Add orthogonal corner if needed
-            if (last_point.x != endpoint_pos.x && last_point.y != endpoint_pos.y) {
-                GridCoord corner = compute_orthogonal_corner(last_point, endpoint_pos);
-                // Check for module collision on both segments
-                if (!does_segment_intersect_module(last_point, corner) &&
-                    !does_segment_intersect_module(corner, endpoint_pos)) {
-                    wiring.points.push_back(corner);
-                } else {
-                    // Try the other corner
-                    GridCoord alt_corner{endpoint_pos.x, last_point.y};
-                    if (!does_segment_intersect_module(last_point, alt_corner) &&
-                        !does_segment_intersect_module(alt_corner, endpoint_pos)) {
-                        wiring.points.push_back(alt_corner);
+            // Create or find signal for this wire
+            Entity signal_entity = m_world.create();
+            m_world.emplace<Signal>(signal_entity, "wire_signal", 1u, Entity{}, std::vector<Entity>{});
+
+            Wire wire_comp{};
+            wire_comp.signal = signal_entity;
+            wire_comp.from_endpoint = wiring.start_endpoint;
+            wire_comp.to_endpoint = endpoint;
+            wire_comp.points = wiring.points;
+
+            m_world.emplace<Wire>(wire_entity, std::move(wire_comp));
+
+            // Update signal's connected ports
+            auto* sig = m_world.get<Signal>(signal_entity);
+            if (sig) {
+                if (wiring.start_endpoint.valid() && m_world.has<Port>(wiring.start_endpoint)) {
+                    sig->connected_ports.push_back(wiring.start_endpoint);
+                    if (auto* p = m_world.get<Port>(wiring.start_endpoint)) {
+                        p->connected_signal = signal_entity;
                     }
-                    // If both fail, we still proceed (user can reroute)
                 }
-            }
-
-            // Validate: need at least a start and end
-            bool valid = wiring.start_endpoint.valid() || !wiring.points.empty();
-            if (valid) {
-                // Create the wire entity
-                Entity wire_entity = m_world.create();
-
-                // Create or find signal for this wire
-                Entity signal_entity = m_world.create();
-                m_world.emplace<Signal>(signal_entity, "wire_signal", 1u, Entity{}, std::vector<Entity>{});
-
-                Wire wire_comp{};
-                wire_comp.signal = signal_entity;
-                wire_comp.from_endpoint = wiring.start_endpoint;
-                wire_comp.to_endpoint = endpoint;
-                wire_comp.points = wiring.points;
-
-                m_world.emplace<Wire>(wire_entity, std::move(wire_comp));
-
-                // Update signal's connected ports
-                auto* sig = m_world.get<Signal>(signal_entity);
-                if (sig) {
-                    if (wiring.start_endpoint.valid() && m_world.has<Port>(wiring.start_endpoint)) {
-                        sig->connected_ports.push_back(wiring.start_endpoint);
-                        if (auto* p = m_world.get<Port>(wiring.start_endpoint)) {
-                            p->connected_signal = signal_entity;
-                        }
-                    }
-                    if (endpoint.valid() && m_world.has<Port>(endpoint)) {
-                        sig->connected_ports.push_back(endpoint);
-                        if (auto* p = m_world.get<Port>(endpoint)) {
-                            p->connected_signal = signal_entity;
-                        }
+                if (endpoint.valid() && m_world.has<Port>(endpoint)) {
+                    sig->connected_ports.push_back(endpoint);
+                    if (auto* p = m_world.get<Port>(endpoint)) {
+                        p->connected_signal = signal_entity;
                     }
                 }
             }
 
-            // Clear wiring state
+            // Explicitly update spatial index with new wire so we can't route through it immediately
+            m_layout_system.rebuild_spatial_index();
+
             cancel_wire();
-        } else {
-            // Clicked on empty space - add orthogonal corner point
-            if (last_point.x != grid_pos.x && last_point.y != grid_pos.y) {
-                // Need a corner for orthogonal routing
-                GridCoord corner = compute_orthogonal_corner(last_point, grid_pos);
-                
-                // Check for module collision
-                if (!does_segment_intersect_module(last_point, corner)) {
-                    wiring.points.push_back(corner);
-                } else {
-                    // Try the other corner
-                    GridCoord alt_corner{grid_pos.x, last_point.y};
-                    if (!does_segment_intersect_module(last_point, alt_corner)) {
-                        wiring.points.push_back(alt_corner);
-                    }
-                    // If both fail, don't add the corner
-                }
-            }
-            // Add the target point (will be purely horizontal or vertical from corner)
-            if (!does_segment_intersect_module(wiring.points.empty() ? last_point : wiring.points.back(), grid_pos)) {
-                wiring.points.push_back(grid_pos);
-            }
         }
+        // Else: Clicked on empty space. Point added (via path commit). Continue wiring.
     }
 }
 
 void GateEditor::handle_wiring_escape() {
     if (m_editor_state.mode == EditorMode::Wiring) {
         if (m_editor_state.wiring.active) {
-            // Cancel in-progress wire
             cancel_wire();
         } else {
-            // Exit wiring mode entirely
             m_editor_state.mode = EditorMode::Select;
         }
     }
 }
 
-Entity GateEditor::find_port_at(GridCoord grid_pos) const {
-    Entity found{};
-    // Cast away const for world iteration (world.view requires non-const)
-    auto& world = const_cast<World&>(m_world);
 
-    world.view<Port, PortGridPosition>().each(
+
+Entity GateEditor::find_port_at(GridCoord grid_pos) {
+    Entity found = Entity{};
+    m_world.view<Port, PortGridPosition>().each(
         [&](Entity e, Port&, PortGridPosition& pos) {
-            if (pos.position.x == grid_pos.x && pos.position.y == grid_pos.y) {
+            if (pos.position == grid_pos) {
                 found = e;
             }
-        }
-    );
-
+        });
     return found;
 }
 
-Entity GateEditor::find_wire_point_at(GridCoord grid_pos) const {
-    // For now, we only support connecting to ports
-    // Wire junction support can be added later
-    return Entity{};
+Entity GateEditor::find_wire_point_at(GridCoord grid_pos) {
+    // Check endpoints and points of existing wires
+    // If we hit a wire point, we return the wire entity (as endpoint reference)?
+    // Or a special entity representing that point?
+    // For now, let's say we can only connect to endpoints or explicitly split wires.
+    // The simplified requirement: "starts from valid ports".
+    // But "can also connect to existing wire junctions" implies we might need to hit a wire.
+    // If we hit a wire, we might need to split it?
+    // For now, let's just return Entity{} unless it matches an endpoint.
+    // Actually, finding a wire point usually implies "splitting" the wire into two.
+    // That's complex. Let's stick to Ports for now as per "strict validation".
+    // But handle_wiring_click calls it. Let's implement basics.
+
+    Entity found = Entity{};
+    m_world.view<Wire>().each([&](Entity e, Wire& wire) {
+        for (const auto& pt : wire.points) {
+            if (pt == grid_pos) {
+                found = e; // Return the wire entity
+                return;
+            }
+        }
+    });
+    return found;
 }
 
 bool GateEditor::is_valid_wire_endpoint(Entity endpoint) const {
-    if (!endpoint.valid()) return false;
-
-    // Valid if it's a port
-    if (m_world.has<Port>(endpoint)) return true;
-
-    // Valid if it's a wire junction (future)
-    if (m_world.has<WireJunction>(endpoint)) return true;
-
-    return false;
+    return m_world.alive(endpoint) && (
+        m_world.has<Port>(endpoint) || m_world.has<Wire>(endpoint)
+    );
 }
 
 void GateEditor::commit_wire() {
-    // Wire is committed in handle_wiring_click when endpoint is found
-    cancel_wire();
+    // Logic moved to handle_wiring_click, this might be unused or for cleanup
+    // We already committed in handle_wiring_click.
+    // Let's leave it empty or remove usage if possible.
+    // Re-implementation just in case:
+     if (m_editor_state.wiring.points.empty()) return;
 }
 
 void GateEditor::cancel_wire() {
     m_editor_state.wiring.active = false;
     m_editor_state.wiring.points.clear();
+    m_editor_state.wiring.current_path.clear();
     m_editor_state.wiring.start_endpoint = Entity{};
 }
 
+
 void GateEditor::delete_wire(Entity wire) {
-    if (!m_world.alive(wire)) return;
     if (!m_world.has<Wire>(wire)) return;
 
-    auto* wire_comp = m_world.get<Wire>(wire);
-    if (wire_comp && wire_comp->signal.valid()) {
-        // Remove signal references from connected ports
-        if (auto* sig = m_world.get<Signal>(wire_comp->signal)) {
-            for (Entity port_e : sig->connected_ports) {
-                if (auto* port = m_world.get<Port>(port_e)) {
-                    if (port->connected_signal == wire_comp->signal) {
-                        port->connected_signal = Entity{};
-                    }
-                }
-            }
+    // Disconnect signal from ports
+    if (auto* w = m_world.get<Wire>(wire)) {
+        Entity sig_entity = w->signal;
+        if (m_world.alive(sig_entity)) {
+             m_world.destroy(sig_entity);
+             // Note: ports connected to this signal need update?
+             // Since signal is destroyed, port->connected_signal becomes invalid or should be cleared.
+             // We should iterate ports? Or rely on weak ref?
+             // System cleanup would be better, but here:
+             m_world.view<Port>().each([&](Entity, Port& p) {
+                 if (p.connected_signal == sig_entity) {
+                     p.connected_signal = Entity{};
+                 }
+             });
         }
-        // Delete the signal if this was the only wire using it
-        // For now, just delete it (later: check reference count)
-        m_world.destroy(wire_comp->signal);
     }
-
     m_world.destroy(wire);
 
-    if (m_selected_entity == wire) {
-        m_selected_entity = Entity{};
-    }
+    // Refresh spatial index
+    m_layout_system.rebuild_spatial_index();
+
+    if (m_selected_entity == wire) m_selected_entity = Entity{};
 }
 
 bool GateEditor::are_ports_on_same_module(Entity port_a, Entity port_b) const {
-    if (!port_a.valid() || !port_b.valid()) return false;
-
-    const Port* pa = m_world.get<Port>(port_a);
-    const Port* pb = m_world.get<Port>(port_b);
-
-    if (!pa || !pb) return false;
-
-    return pa->owner.valid() && pa->owner == pb->owner;
-}
-
-bool GateEditor::does_segment_intersect_module(GridCoord from, GridCoord to) const {
-    auto& world = const_cast<World&>(m_world);
-
-    // Determine segment bounds in grid coords
-    std::int32_t min_x = std::min(from.x, to.x);
-    std::int32_t max_x = std::max(from.x, to.x);
-    std::int32_t min_y = std::min(from.y, to.y);
-    std::int32_t max_y = std::max(from.y, to.y);
-
-    bool intersects = false;
-
-    world.view<ModuleInst, ModulePixelPosition, ModuleExtent>().each(
-        [&](Entity, ModuleInst&, ModulePixelPosition& pos, ModuleExtent& ext) {
-            if (intersects) return;
-
-            // Convert module bounds to grid coords
-            int unit = m_grid.unit_px();
-            std::int32_t mod_left = static_cast<std::int32_t>(pos.x / unit);
-            std::int32_t mod_top = static_cast<std::int32_t>(pos.y / unit);
-            std::int32_t mod_right = mod_left + ext.width;
-            std::int32_t mod_bottom = mod_top + ext.height;
-
-            // Check if segment overlaps with module interior (not edges)
-            // For horizontal segment (from.y == to.y)
-            if (from.y == to.y) {
-                std::int32_t y = from.y;
-                if (y > mod_top && y < mod_bottom) {
-                    if (max_x > mod_left && min_x < mod_right) {
-                        intersects = true;
-                    }
-                }
-            }
-            // For vertical segment (from.x == to.x)
-            else if (from.x == to.x) {
-                std::int32_t x = from.x;
-                if (x > mod_left && x < mod_right) {
-                    if (max_y > mod_top && min_y < mod_bottom) {
-                        intersects = true;
-                    }
-                }
-            }
-        }
-    );
-
-    return intersects;
-}
-
-GridCoord GateEditor::compute_orthogonal_corner(GridCoord from, GridCoord to) const {
-    // Default: horizontal first, then vertical
-    // Corner is at (to.x, from.y)
-    return GridCoord{to.x, from.y};
+    auto* pa = m_world.get<Port>(port_a);
+    auto* pb = m_world.get<Port>(port_b);
+    if (pa && pb) {
+        return pa->owner == pb->owner;
+    }
+    return false;
 }
 
 } // namespace netra::app
+

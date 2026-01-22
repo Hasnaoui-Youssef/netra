@@ -12,14 +12,13 @@ bool Entity::valid() const { return m_id != NullEntity; }
 
 Entity::operator bool() const { return valid(); }
 
-bool Entity::operator==(const Entity& other) const { return m_id == other.m_id; }
+bool Entity::operator==(const Entity &other) const = default;
 
-bool Entity::operator!=(const Entity& other) const { return m_id != other.m_id; }
-
-bool Entity::operator<(const Entity& other) const { return m_id < other.m_id; }
+bool Entity::operator<(const Entity &other) const { return m_id < other.m_id; }
 
 } // namespace netra
 
-std::size_t std::hash<netra::Entity>::operator()(const netra::Entity& e) const noexcept {
-    return std::hash<netra::EntityID>{}(e.id());
+std::size_t
+std::hash<netra::Entity>::operator()(const netra::Entity &e) const noexcept {
+  return std::hash<netra::EntityID>{}(e.id());
 }

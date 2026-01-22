@@ -59,8 +59,8 @@ private:
     void toggle_wiring_mode();
     void handle_wiring_click(GridCoord grid_pos);
     void handle_wiring_escape();
-    Entity find_port_at(GridCoord grid_pos) const;
-    Entity find_wire_point_at(GridCoord grid_pos) const;
+    Entity find_port_at(GridCoord grid_pos);
+    Entity find_wire_point_at(GridCoord grid_pos);
     bool is_valid_wire_endpoint(Entity endpoint) const;
     bool are_ports_on_same_module(Entity port_a, Entity port_b) const;
     bool does_segment_intersect_module(GridCoord from, GridCoord to) const;

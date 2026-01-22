@@ -3,6 +3,7 @@
 # ==============================================================================
 add_library(netra_engine STATIC
     src/core/entity.cpp
+    src/core/astar.cpp
     src/components/components.cpp
     src/components/render_components.cpp
     src/systems/simulation.cpp
