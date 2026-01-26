@@ -4,6 +4,7 @@
 
 #include <imgui.h>
 #include <glm/glm.hpp>
+#include <optional>
 
 namespace netra::app {
 
@@ -39,8 +40,8 @@ static const GateTemplate k_gate_templates[] = {
     {"XOR",  20, 16, {{"A", PortDirection::In, PortSide::Left, 0, 4},
                       {"B", PortDirection::In, PortSide::Left, 0, 12},
                       {"Y", PortDirection::Out, PortSide::Right, 20, 8}}},
-    {"XNOR", 20, 16, {{"A", PortDirection::In, PortSide::Left, 0, 4},
-                      {"B", PortDirection::In, PortSide::Left, 0, 12},
+    {"XNOR", 20, 16, {{"A", PortDirection::In, PortSide::Left, -1, 4},
+                      {"B", PortDirection::In, PortSide::Left, -1, 12},
                       {"Y", PortDirection::Out, PortSide::Right, 20, 8}}},
     {"NOT",  20, 16, {{"A", PortDirection::In, PortSide::Left, 0, 8},
                       {"Y", PortDirection::Out, PortSide::Right, 20, 8}}},
@@ -80,7 +81,9 @@ static void begin_top_menu_bar() {
 GateEditor::GateEditor()
     : m_grid(10)
     , m_layout_system(m_world, m_grid)
-    , m_render_system(m_world, m_grid, m_editor_state) {}
+    , m_render_system(m_world, m_grid, m_editor_state)
+    , m_select_handler(m_world, m_grid,m_layout_system, m_canvas_mouse_pos)
+    {}
 
 void GateEditor::init(const std::string& shader_dir) {
     m_render_system.init(shader_dir);
@@ -140,20 +143,13 @@ void GateEditor::delete_entity(Entity entity) {
 }
 
 GridCoord GateEditor::snap_to_grid(glm::vec2 pixel_pos) const {
-    int unit = m_grid.unit_px();
+    float unit = static_cast<float>(m_grid.unit_px());
     return GridCoord{
-        static_cast<std::int32_t>(std::round(pixel_pos.x / static_cast<float>(unit))),
-        static_cast<std::int32_t>(std::round(pixel_pos.y / static_cast<float>(unit)))
+        static_cast<std::int32_t>(std::round(pixel_pos.x / unit)),
+        static_cast<std::int32_t>(std::round(pixel_pos.y / unit))
     };
 }
 
-PortSide GateEditor::get_anchor_side(glm::vec2 drag_delta) const {
-    if (std::abs(drag_delta.x) > std::abs(drag_delta.y)) {
-        return drag_delta.x > 0 ? PortSide::Left : PortSide::Right;
-    } else {
-        return drag_delta.y > 0 ? PortSide::Top : PortSide::Bottom;
-    }
-}
 
 Entity GateEditor::get_port_on_side(Entity module, PortSide side) {
     auto* hier = m_world.get<Hierarchy>(module);
@@ -235,137 +231,66 @@ void GateEditor::draw(graphics::Window& window) {
 
         const ImVec2 origin = ImGui::GetItemRectMin();
         const ImVec2 mouse = ImGui::GetIO().MousePos;
-        const glm::vec2 mouse_canvas(mouse.x - origin.x, mouse.y - origin.y);
+        m_canvas_mouse_pos.x = mouse.x - origin.x;
+        m_canvas_mouse_pos.y = mouse.y - origin.y;
 
-        // Toggle wiring mode with 'w'
         if (m_canvas_hovered && ImGui::IsKeyPressed(ImGuiKey_W, false)) {
             toggle_wiring_mode();
         }
 
-        // Escape handling (cancel wire in wiring mode)
         if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
             handle_wiring_escape();
         }
+
+        switch (m_editor_state.mode) {
+            case EditorMode::Select: {
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_canvas_hovered) {
+                    if(auto selected_entity = m_select_handler.handleMouseClick()) {
+                        m_selected_entity = selected_entity.value();
+                    }else {
+                        m_selected_entity = Entity{};
+                    }
+                }
+                if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                    m_select_handler.handleMouseDown();
+                }
+                if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+                    m_select_handler.handleMouseRelease();
+                }
+                break;
+            }
+            case EditorMode::Wiring: {
+                m_editor_state.wiring.mouse_grid_pos = snap_to_grid(m_canvas_mouse_pos);
+
+                if (m_editor_state.wiring.active) {
+                    GridCoord start_pos{};
+                    if (!m_editor_state.wiring.points.empty()) {
+                        start_pos = m_editor_state.wiring.points.back();
+                        m_editor_state.wiring.current_path = m_layout_system.route_wire(start_pos, m_editor_state.wiring.mouse_grid_pos);
+                    }
+                }
+
+                if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_canvas_hovered) {
+                    //We should commit the currently previewed wire segment
+                    GridCoord grid_pos = m_editor_state.wiring.mouse_grid_pos;
+                    handle_wiring_click(grid_pos);
+                }
+                break;
+            }
+            default : {}
+        }
+
+
 
         // Drop target: create gate at mouse position (only in Select mode)
         if (m_editor_state.mode == EditorMode::Select && ImGui::BeginDragDropTarget()) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("NETRA_GATE")) {
                 std::string gate_type(static_cast<const char*>(payload->Data));
-                GridCoord grid_pos = snap_to_grid(mouse_canvas);
+                GridCoord grid_pos = snap_to_grid(m_canvas_mouse_pos);
                 Entity new_gate = create_gate(gate_type, grid_pos);
                 m_selected_entity = new_gate;
             }
             ImGui::EndDragDropTarget();
-        }
-
-        // Mode-specific input handling
-        if (m_editor_state.mode == EditorMode::Wiring) {
-            // Update mouse position for rubber band preview
-            m_editor_state.wiring.mouse_grid_pos = snap_to_grid(mouse_canvas);
-
-            // Calculate dynamic path if active
-            if (m_editor_state.wiring.active) {
-                GridCoord start_pos{};
-                bool has_start = false;
-
-                if (!m_editor_state.wiring.points.empty()) {
-                    start_pos = m_editor_state.wiring.points.back();
-                    has_start = true;
-                } else if (m_editor_state.wiring.start_endpoint.valid()) {
-                    if (auto* pos = m_world.get<PortGridPosition>(m_editor_state.wiring.start_endpoint)) {
-                        start_pos = pos->position;
-                        has_start = true;
-                    }
-                }
-
-                if (has_start) {
-                    // Avoid re-calculating if mouse hasn't moved (optimization)
-                    // But we don't store last mouse pos easily here, A* is fast enough for now.
-
-                    // Route wire
-                    m_editor_state.wiring.current_path = m_layout_system.route_wire(start_pos, m_editor_state.wiring.mouse_grid_pos);
-                }
-            }
-
-            // Wiring mode: click places points
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_canvas_hovered) {
-                GridCoord grid_pos = snap_to_grid(mouse_canvas);
-                handle_wiring_click(grid_pos);
-            }
-        } else {
-            // Select mode: selection and drag
-            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_canvas_hovered) {
-                m_selected_entity = Entity{};
-                m_dragging_entity = Entity{};
-
-                // Hit test modules (reverse order for top-most first)
-                std::vector<std::pair<Entity, ModulePixelPosition*>> modules;
-                m_world.view<ModuleInst, ModulePixelPosition, ModuleExtent>().each(
-                        [&](Entity e, ModuleInst&, ModulePixelPosition& pos, ModuleExtent& ext) {
-                        modules.push_back({e, &pos});
-                        }
-                        );
-
-                for (auto it = modules.rbegin(); it != modules.rend(); ++it) {
-                    auto [e, pos] = *it;
-                    auto* ext = m_world.get<ModuleExtent>(e);
-                    float w = static_cast<float>(ext->width * m_grid.unit_px());
-                    float h = static_cast<float>(ext->height * m_grid.unit_px());
-
-                    if (mouse_canvas.x >= pos->x && mouse_canvas.x <= pos->x + w &&
-                            mouse_canvas.y >= pos->y && mouse_canvas.y <= pos->y + h) {
-                        m_selected_entity = e;
-                        m_dragging_entity = e;
-                        m_drag_offset = glm::vec2(mouse_canvas.x - pos->x, mouse_canvas.y - pos->y);
-                        m_drag_start_mouse = mouse_canvas;
-                        break;
-                    }
-                }
-            }
-        } // End Select mode block
-
-        // Dragging (only in Select mode)
-        if (m_editor_state.mode == EditorMode::Select) {
-            if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && m_dragging_entity.valid()) {
-                if (auto* pos = m_world.get<ModulePixelPosition>(m_dragging_entity)) {
-                    pos->x = mouse_canvas.x - m_drag_offset.x;
-                    pos->y = mouse_canvas.y - m_drag_offset.y;
-                }
-            }
-
-            // Drop: snap to grid
-            if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && m_dragging_entity.valid()) {
-                if (auto* pos = m_world.get<ModulePixelPosition>(m_dragging_entity)) {
-                    glm::vec2 drag_delta = mouse_canvas - m_drag_start_mouse;
-                    PortSide anchor_side = get_anchor_side(drag_delta);
-                    Entity anchor_port = get_port_on_side(m_dragging_entity, anchor_side);
-
-                    if (anchor_port.valid()) {
-                        auto* port_offset = m_world.get<PortOffset>(anchor_port);
-                        if (port_offset) {
-                            // Compute where the anchor port currently is in pixels
-                            glm::vec2 port_pixel{
-                                pos->x + static_cast<float>(port_offset->x * m_grid.unit_px()),
-                                pos->y + static_cast<float>(port_offset->y * m_grid.unit_px())
-                            };
-
-                            // Snap that port to grid
-                            GridCoord snapped_port_grid = snap_to_grid(port_pixel);
-
-                            // Update port grid position
-                            if (auto* port_grid = m_world.get<PortGridPosition>(anchor_port)) {
-                                port_grid->position = snapped_port_grid;
-                            } else {
-                                m_world.emplace<PortGridPosition>(anchor_port, snapped_port_grid);
-                            }
-
-                            // Use layout system to compute module position from anchor
-                            m_layout_system.update_module_from_anchor(anchor_port, m_dragging_entity);
-                        }
-                    }
-                }
-                m_dragging_entity = Entity{};
-            }
         }
 
         // Delete with 'd' - handles both modules and wires
@@ -376,29 +301,12 @@ void GateEditor::draw(graphics::Window& window) {
                 delete_entity(m_selected_entity);
             }
         }
-
-        // Render via RenderSystem
-        // Convert ImGui coords to OpenGL (bottom-left origin)
         const int vx = static_cast<int>(origin.x - vp->Pos.x);
         const int vy = static_cast<int>(vp->Size.y - ((origin.y - vp->Pos.y) + content_size.y));
         const int vw = static_cast<int>(content_size.x);
         const int vh = static_cast<int>(content_size.y);
 
-        m_render_system.render_region({static_cast<float>(vw), static_cast<float>(vh)}, vx, vy, vw, vh, m_dragging_entity);
-
-        // Highlight selected module
-        //if (m_selected_entity.valid()) {
-        //    if (auto* pos = m_world.get<ModulePixelPosition>(m_selected_entity)) {
-        //        if (auto* ext = m_world.get<ModuleExtent>(m_selected_entity)) {
-        //            float w = static_cast<float>(ext->width * m_grid.unit_px());
-        //            float h = static_cast<float>(ext->height * m_grid.unit_px());
-        //            ImDrawList* dl = ImGui::GetWindowDrawList();
-        //            ImVec2 p0(origin.x + pos->x, origin.y + pos->y);
-        //            ImVec2 p1(p0.x + w, p0.y + h);
-        //            dl->AddRect(p0, p1, IM_COL32(255, 220, 0, 255), 0.0f, 0, 2.0f);
-        //        }
-        //    }
-        //}
+        m_render_system.render_region({static_cast<float>(vw), static_cast<float>(vh)}, vx, vy, vw, vh, m_select_handler.getDragEntity());
     }
     ImGui::End();
 }
@@ -406,32 +314,17 @@ void GateEditor::draw(graphics::Window& window) {
 // ... (toggle_wiring_mode)
 void GateEditor::toggle_wiring_mode() {
     if (m_editor_state.mode == EditorMode::Wiring) {
-        // Exit wiring mode, cancel any in-progress wire
         cancel_wire();
-        m_editor_state.mode = EditorMode::Select;
+        m_editor_state.mode = m_editor_state.last_mode;
     } else {
-        // Enter wiring mode, clear selection
         m_selected_entity = Entity{};
-        m_dragging_entity = Entity{};
+        m_editor_state.last_mode = m_editor_state.mode;
         m_editor_state.mode = EditorMode::Wiring;
     }
 }
 
 void GateEditor::handle_wiring_click(GridCoord grid_pos) {
     auto& wiring = m_editor_state.wiring;
-
-    // Helper to get the last point
-    auto get_last_point = [&]() -> GridCoord {
-        if (!wiring.points.empty()) {
-            return wiring.points.back();
-        }
-        if (wiring.start_endpoint.valid()) {
-            if (auto* pos = m_world.get<PortGridPosition>(wiring.start_endpoint)) {
-                return pos->position;
-            }
-        }
-        return grid_pos; // Should not happen if active
-    };
 
     Entity port = find_port_at(grid_pos);
     Entity wire_point = find_wire_point_at(grid_pos);
@@ -440,27 +333,24 @@ void GateEditor::handle_wiring_click(GridCoord grid_pos) {
     // Must be a port OR a free cell (not blocked by module/wire).
     // Note: wire_point is valid too.
     bool is_blocked = m_layout_system.is_cell_blocked(grid_pos);
-    bool is_valid_click = port.valid() || wire_point.valid() || !is_blocked;
+    bool is_valid_click = (port.valid() ^ wire_point.valid()) || !is_blocked;
 
     if (!is_valid_click) {
         return; // Clicked on module interior or obstacle
     }
 
     if (!wiring.active) {
-        // Starting a new wire
-        // STRICT: Must start from a valid input (Port or Junction).
-        // User request: "wire creation should only start from a port" (or junction presumably)
         if (port.valid()) {
-            wiring.active = true;
             wiring.start_endpoint = port;
-            wiring.points.clear();
-            wiring.current_path.clear();
         } else if (wire_point.valid()) {
-            wiring.active = true;
             wiring.start_endpoint = wire_point;
-            wiring.points.clear();
-            wiring.current_path.clear();
+        }else {
+            return;
         }
+        wiring.active = true;
+        wiring.points.clear();
+        wiring.points.push_back(grid_pos);
+        wiring.current_path.clear();
         // Else: Ignore click on empty space
     } else {
         // Continuing/Finishing wire
@@ -489,19 +379,16 @@ void GateEditor::handle_wiring_click(GridCoord grid_pos) {
 
         wiring.current_path.clear();
 
-        // Check completion
         if (port.valid() || wire_point.valid()) {
             Entity endpoint = port.valid() ? port : wire_point;
 
-            // Check if connecting to same module (invalid)
             if (port.valid() && wiring.start_endpoint.valid()) {
                 if (are_ports_on_same_module(wiring.start_endpoint, port)) {
+                    cancel_wire();
                     return;
                 }
             }
 
-            // Create wire
-             // Create the wire entity
             Entity wire_entity = m_world.create();
 
             // Create or find signal for this wire
@@ -555,14 +442,10 @@ void GateEditor::handle_wiring_escape() {
 
 
 Entity GateEditor::find_port_at(GridCoord grid_pos) {
-    Entity found = Entity{};
-    m_world.view<Port, PortGridPosition>().each(
-        [&](Entity e, Port&, PortGridPosition& pos) {
-            if (pos.position == grid_pos) {
-                found = e;
-            }
-        });
-    return found;
+    std::optional<Entity> found = m_world.view<Port, PortGridPosition>().find_first(
+            [&grid_pos](Port&, PortGridPosition& pos){ return pos.position == grid_pos; }
+            );
+    return found.has_value() ? found.value() : Entity{};
 }
 
 Entity GateEditor::find_wire_point_at(GridCoord grid_pos) {

@@ -60,6 +60,7 @@ void RenderSystem::init(const std::string &shader_dir) {
         }
     )";
 
+
   m_port_shader = graphics::Shader(solid_vert, solid_frag);
   m_wire_shader = graphics::Shader(solid_vert, solid_frag);
 }
@@ -94,11 +95,11 @@ void RenderSystem::setup_gate_quad() {
 
 void RenderSystem::setup_quad() {
   // Unit quad [0,1] x [0,1] for solid color primitives
-  std::array<float, 12> vertices = {
+  auto vertices = std::to_array({
       0.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f,
 
       0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f,
-  };
+  });
 
   glGenVertexArrays(1, &m_quad_vao);
   glGenBuffers(1, &m_quad_vbo);
@@ -271,32 +272,19 @@ void RenderSystem::render_wires(const glm::mat4 &view_proj,
   // Preview only if start_point is valid
   if (m_editor.wiring.active && m_editor.wiring.start_endpoint.valid()) {
     // Reconstruct preview points same way as render logic
-    std::vector<GridCoord> preview_pts;
-    if (auto const *pos =
-            m_world.get<PortGridPosition>(m_editor.wiring.start_endpoint)) {
-      preview_pts.push_back(pos->position);
-      // GateEditor will populate it via A* in
-      // handle_wiring_click (wait, handle_wiring uses it for commit). The
-      // preview path needs to be calculated by GateEditor frame-by-frame or
-      // stored in EditorState. Assumption: GateEditor will update wiring.points
-      // with the A* path dynamically.
-      preview_pts.insert(preview_pts.end(), m_editor.wiring.points.begin(),
-                         m_editor.wiring.points.end());
+    std::vector<GridCoord> preview_pts(m_editor.wiring.points.begin(), m_editor.wiring.points.end());
       // Note: we treat preview as a "wire" with null owner entity for crossing
       // checks (owner check handles valid only)
-      segments.add_segments(preview_pts, Entity{});
-    }
+    segments.add_segments(preview_pts, Entity{});
   }
 
   // 2. Generate Mesh
   std::vector<float> vertices;
-  const float thickness = 3.0f; // Pixels
-  const float half_th = thickness * 0.5f;
   const auto unit_px = static_cast<float>(m_grid.unit_px());
 
   auto add_rect = [&](glm::vec2 p1, glm::vec2 p2) {
-    glm::vec2 dir = glm::normalize(p2 - p1);
-    glm::vec2 perp = {-dir.y, dir.x};
+    glm::vec2 dir = glm::normalize(p2 - p1); // Normalized the vector |P2->P1|
+    glm::vec2 perp = {-dir.y, dir.x}; // Counter clockwise normalized orthogonal vector to |P2->p1|
     glm::vec2 offset = perp * half_th;
 
     // 4 corners
@@ -424,10 +412,8 @@ void RenderSystem::render_wires(const glm::mat4 &view_proj,
   // Generate for committed
   m_world.view<Wire>().each([&](Entity e, Wire &wire) {
     std::vector<GridCoord> full_points;
-    if (wire.from_endpoint.valid()) {
-      if (auto *pos = m_world.get<PortGridPosition>(wire.from_endpoint))
+    if (auto *pos = m_world.get<PortGridPosition>(wire.from_endpoint))
         full_points.push_back(pos->position);
-    }
     full_points.insert(full_points.end(), wire.points.begin(),
                        wire.points.end());
     if (wire.to_endpoint.valid()) {
@@ -479,16 +465,27 @@ void RenderSystem::render_wires(const glm::mat4 &view_proj,
 void RenderSystem::collect_committed_segments(WireSegments &segments, Entity e,
                                               const Wire &wire) {
   std::vector<GridCoord> full_points;
-  if (wire.from_endpoint.valid()) {
-    if (auto const *pos = m_world.get<PortGridPosition>(wire.from_endpoint))
+  if (auto const *pos = m_world.get<PortGridPosition>(wire.from_endpoint))
       full_points.push_back(pos->position);
-  }
   full_points.insert(full_points.end(), wire.points.begin(), wire.points.end());
-  if (wire.to_endpoint.valid()) {
-    if (auto const *pos = m_world.get<PortGridPosition>(wire.to_endpoint))
+  if (auto const *pos = m_world.get<PortGridPosition>(wire.to_endpoint))
       full_points.push_back(pos->position);
-  }
   segments.add_segments(full_points, e);
+}
+
+void RenderSystem::add_orthogonal_wire_vertices(glm::vec2 p1, glm::vec2 p2) {
+    std::array<glm::vec2, 4> corners;
+    if(p1.x == p2.x) {
+        corners[0] = {p1.x, p1.y + half_th};
+        corners[1] = {p1.x, p1.y - half_th};
+        corners[2] = {p2.x, p2.y + half_th};
+        corners[3] = {p2.x, p2.y - half_th};
+    }else{
+        corners[0] = {p1.x + half_th, p1.y};
+        corners[1] = {p1.x - half_th, p1.y};
+        corners[2] = {p2.x + half_th, p2.y};
+        corners[3] = {p2.x - half_th, p2.y};
+    }
 }
 
 std::string RenderSystem::load_file(const std::string &path) {

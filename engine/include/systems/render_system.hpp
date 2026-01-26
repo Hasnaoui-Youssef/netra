@@ -51,6 +51,13 @@ private:
   // Shaders keyed by ShaderKey::key (e.g., "AND", "OR")
   std::unordered_map<std::string, graphics::Shader> m_shaders;
 
+  //Wire triangle vertices
+  std::vector<float> triangle_vertices;
+  //Wire thickness and half thickness in pixels
+  constexpr static float thickness = 3.0f;
+  constexpr static float half_th = thickness * 0.5f;
+
+
   // Simple shaders for ports and wires
   graphics::Shader m_port_shader;
   graphics::Shader m_wire_shader;
@@ -68,6 +75,8 @@ private:
                                   const Wire &wire);
   void collect_preview_segments(WireSegments &segments, Entity e,
                                 const Wire &wire);
+
+  void add_orthogonal_wire_vertices(glm::vec2 p1, glm::vec2 p2);
 
   std::string load_file(const std::string &path);
 };

@@ -2,6 +2,7 @@
 
 #include <core/world.hpp>
 #include <core/entity.hpp>
+#include <select_mode.hpp>
 #include <components/render_components.hpp>
 #include <editor_state.hpp>
 #include <graphics/grid.hpp>
@@ -31,11 +32,13 @@ private:
     EditorState m_editor_state;
     LayoutSystem m_layout_system;
     RenderSystem m_render_system;
+    select_mode::SelectModeHandler m_select_handler;
 
     Entity m_selected_entity{};
     Entity m_dragging_entity{};
     glm::vec2 m_drag_offset{0.0f, 0.0f};
     glm::vec2 m_drag_start_mouse{0.0f, 0.0f};
+    glm::vec2 m_canvas_mouse_pos{0.0f, 0.0f};
 
     float m_palette_width = 220.f;
     bool m_canvas_hovered = false;
@@ -49,8 +52,6 @@ private:
     // Snap pixel position to nearest grid
     GridCoord snap_to_grid(glm::vec2 pixel_pos) const;
 
-    // Determine anchor side from drag direction
-    PortSide get_anchor_side(glm::vec2 drag_delta) const;
 
     // Get first port on given side
     Entity get_port_on_side(Entity module, PortSide side);

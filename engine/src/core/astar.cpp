@@ -40,6 +40,7 @@ std::vector<GridCoord> find_orthogonal_path(GridCoord start, GridCoord end, Obst
     if (start.x == end.x && start.y == end.y) {
         return {start};
     }
+    if(is_blocked(end)) return {};
 
     std::priority_queue<Node, std::vector<Node>, std::greater<Node>> open_set;
     std::unordered_map<GridCoord, int, GridCoordHash> best_g_cost;
@@ -48,8 +49,8 @@ std::vector<GridCoord> find_orthogonal_path(GridCoord start, GridCoord end, Obst
     open_set.push({start, start, 0, manhattan_distance(start, end), 0});
     best_g_cost[start] = 0;
 
-    const int MOVE_COST = 10;
-    const int TURN_PENALTY = 50; // High penalty to discourage turns
+    const int MOVE_COST = 1;
+    const int TURN_PENALTY = 50;
 
     // Directions: 0=up, 1=down, 2=left, 3=right
     const GridCoord dirs[] = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
@@ -72,17 +73,14 @@ std::vector<GridCoord> find_orthogonal_path(GridCoord start, GridCoord end, Obst
             return path;
         }
 
-        // Create neighbors
         for (int i = 0; i < 4; ++i) {
             GridCoord neighbor_pos{current.pos.x + dirs[i].x, current.pos.y + dirs[i].y};
 
-            // Check blocked (unless it's the target)
             bool is_target = (neighbor_pos.x == end.x && neighbor_pos.y == end.y);
             if (!is_target && is_blocked(neighbor_pos)) {
                 continue;
             }
 
-            // Calculate costs
             int new_turn_penalty = 0;
             if (current.direction != 0 && current.direction != dir_ids[i]) {
                 new_turn_penalty = TURN_PENALTY;

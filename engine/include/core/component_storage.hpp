@@ -49,12 +49,12 @@ public:
     }
 
     T* get(EntityID entity) {
-        if (!contains(entity)) return nullptr;
+        if (!contains(entity) || entity == NullEntity) return nullptr;
         return &m_dense_components[m_sparse[entity]];
     }
 
     const T* get(EntityID entity) const {
-        if (!contains(entity)) return nullptr;
+        if (!contains(entity) || entity == NullEntity) return nullptr;
         return &m_dense_components[m_sparse[entity]];
     }
 

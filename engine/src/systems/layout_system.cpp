@@ -102,12 +102,10 @@ bool LayoutSystem::is_cell_blocked(GridCoord pos, bool checks_module,
   if (!occupier.valid())
     return false;
 
-  // Check if it's a module
   if (checks_module && m_world.has<ModuleInst>(occupier)) {
     return true;
   }
 
-  // Check if it's a wire
   if (checks_wire && m_world.has<Wire>(occupier)) {
     return true;
   }
@@ -198,5 +196,6 @@ void LayoutSystem::rebuild_spatial_index() {
     }
   });
 }
+
 
 } // namespace netra

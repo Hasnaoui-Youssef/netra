@@ -3,6 +3,7 @@
 # ==============================================================================
 add_executable(netra
     src/main.cpp
+    src/select_mode.cpp
     src/gate_editor.cpp
 )
 

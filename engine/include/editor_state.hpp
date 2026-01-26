@@ -17,11 +17,11 @@ enum class EditorMode : std::uint8_t {
 // Transient state for a wire being constructed.
 // Not persisted; cleared on mode exit or wire completion.
 struct WiringState {
-    std::vector<GridCoord> points;  // Points placed so far (in order)
-    std::vector<GridCoord> current_path; // Dynamic path from last point to mouse (A* preview)
-    Entity start_endpoint{};        // Port or wire junction where wiring began
-    GridCoord mouse_grid_pos{};     // Current mouse position in grid coords (for preview)
-    bool active = false;            // True if currently placing a wire
+    std::vector<GridCoord> points;  // Points placed so far, this includes the endpoints' coords
+    std::vector<GridCoord> current_path;
+    Entity start_endpoint{};
+    GridCoord mouse_grid_pos{};
+    bool active = false;
 };
 
 // Aggregates editor/view state that is not simulation data.
@@ -38,6 +38,7 @@ struct WiringState {
 struct EditorState {
     graphics::Camera2D camera;
     EditorMode mode = EditorMode::Select;
+    EditorMode last_mode = EditorMode::Select;
     WiringState wiring;
 };
 

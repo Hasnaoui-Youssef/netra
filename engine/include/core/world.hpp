@@ -3,8 +3,10 @@
 #include "component_storage.hpp"
 #include "entity.hpp"
 #include <any>
+#include <optional>
 #include <typeindex>
 #include <unordered_map>
+#include <concepts>
 
 namespace netra {
 
@@ -106,6 +108,38 @@ public:
         }
       }
     }
+    template <typename Pred>
+        requires std::is_invocable_r_v<bool, Pred, Entity, Components&...>
+        std::optional<Entity> find_first(Pred&& predicate) {
+            auto* first_storage = m_world.get_storage
+                <std::tuple_element_t<0, std::tuple<Components...>>>();
+            if (!first_storage) return std::nullopt;
+            for(EntityID id : first_storage->entities()) {
+                Entity entity(id);
+                if((m_world.has<Components>(entity) && ...)) {
+                    if(predicate(entity, *m_world.get<Components>(entity)...)) {
+                        return entity;
+                    }
+                }
+            }
+            return std::nullopt;
+        }
+    template <typename Pred>
+        requires std::is_invocable_r_v<bool, Pred, Components&...>
+        std::optional<Entity> find_first(Pred&& predicate) {
+            auto* first_storage = m_world.get_storage
+                <std::tuple_element_t<0, std::tuple<Components...>>>();
+            if (!first_storage) return std::nullopt;
+            for(EntityID id : first_storage->entities()) {
+                Entity entity(id);
+                if((m_world.has<Components>(entity) && ...)) {
+                    if(predicate(*m_world.get<Components>(entity)...)) {
+                        return entity;
+                    }
+                }
+            }
+            return std::nullopt;
+        }
 
   private:
     World &m_world;
